@@ -282,7 +282,7 @@ export default function PaymentReturn() {
         };
       }
 
-      const response = await fetch('http://localhost:5000/api/alfa/check-payment-status', {
+      const response = await fetch('https://alfalahpayemnt-production.up.railway.app/api/alfa/check-payment-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId })

@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/* --- THEME VARIABLES --- */
+:root {
+  --color-primary: #0F172A; /* Deep Royal Blue */
+  --color-secondary: #06B6D4; /* Vibrant Cyan */
+  --color-accent: #F59E0B; /* Soft Gold */
+  --color-bg-soft: #F8FAFC; /* Slate 50 */
+}
+
+body {
+    font-family: 'Outfit', sans-serif; /* Changed from Comfortaa for more professional look */
+    background-color: var(--color-bg-soft);
+    color: #1e293b; /* Slate 800 */
+    overflow-x: hidden;
+}
+
+/* --- CUSTOM SCROLLBAR --- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* --- SELECTION COLOR --- */
+::selection {
+  background-color: rgba(6, 182, 212, 0.2);
+  color: #0F172A;
+}
+
+/* --- ANIMATED BORDER (Refined) --- */
+.animated-border {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.animated-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--color-secondary) 90deg,
+    transparent 180deg
+  );
+  animation: spin-border 4s linear infinite;
+  border-radius: inherit;
+}
+
+.animated-border::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  background: white;
+  border-radius: inherit;
+  z-index: -1;
+}
+
+@keyframes spin-border {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* --- Utility for Glassmorphism --- */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.glass-effect-dark {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}

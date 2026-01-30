@@ -55,7 +55,7 @@ export default function PayPage() {
     setStatus({ type: '', message: '' });
 
     try {
-      const response = await fetch('http://localhost:5000/api/alfa/pay', {
+      const response = await fetch('https://alfalahpayemnt-production.up.railway.app/api/alfa/pay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

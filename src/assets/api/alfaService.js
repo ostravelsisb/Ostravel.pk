@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api", // Local development server
+  baseURL: "https://alfalahpayemnt-production.up.railway.app/api", // Deployed backend (same as insurance payment)
 });
 
 export const createPayment = (data) => api.post("/alfa/create-payment", data);

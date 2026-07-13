@@ -26,6 +26,23 @@ export default function PaymentReturn() {
       return;
     }
 
+    // HARD GATE: trust the bank's own redirect params first.
+    // ResponseCode '00' / TransactionStatus 'SUCCESS' is Bank Alfalah's
+    // convention for an approved transaction — anything else (declined,
+    // cancelled, timed out) must stop here and never reach Firestore.
+    if (responseCode && responseCode !== '00') {
+      setPaymentStatus('failed');
+      setError('Payment was not successful. Please try again.');
+      setLoading(false);
+      return;
+    }
+    if (transactionStatus && transactionStatus.toUpperCase() !== 'SUCCESS' && transactionStatus.toUpperCase() !== 'PAID') {
+      setPaymentStatus('failed');
+      setError('Payment was not successful. Please try again.');
+      setLoading(false);
+      return;
+    }
+
     // Start the payment verification and policy creation flow
     processPaymentAndPolicy(orderId);
   }, []);
@@ -294,10 +311,18 @@ export default function PaymentReturn() {
 
       const data = await response.json();
 
+      // Don't just trust data.success (that only means the status-check
+      // call itself worked). Confirm the underlying transaction actually
+      // succeeded before letting the caller proceed.
+      const ts = data.transactionStatus || {};
+      const txnOk =
+        data.success &&
+        (ts.ResponseCode === '00' || String(ts.TransactionStatus).toUpperCase() === 'SUCCESS');
+
       return {
-        success: data.success,
+        success: txnOk,
         data: data.transactionStatus,
-        message: data.message
+        message: txnOk ? data.message : (data.message || 'Payment was not successful')
       };
     } catch (err) {
       console.error('Payment verification error:', err);

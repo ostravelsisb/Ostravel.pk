@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 // Import useNavigate for navigation
 import { useNavigate } from "react-router-dom";
 import {
@@ -6,56 +6,92 @@ import {
   FaPlaneDeparture,
 } from "react-icons/fa"; // Only keeping the necessary icons
 
+// --- Static Country List (replaces restcountries.com API — was failing) ---
+const countryList = [
+  { name: "Australia", code: "au" },
+  { name: "Austria", code: "at" },
+  { name: "Azerbaijan", code: "az" },
+  { name: "Bahrain", code: "bh" },
+  { name: "Belgium", code: "be" },
+  { name: "Bulgaria", code: "bg" },
+  { name: "Canada", code: "ca" },
+  { name: "China", code: "cn" },
+  { name: "Czech Republic", code: "cz" },
+  { name: "Denmark", code: "dk" },
+  { name: "Egypt", code: "eg" },
+  { name: "Estonia", code: "ee" },
+  { name: "Ethiopia", code: "et" },
+  { name: "Finland", code: "fi" },
+  { name: "France", code: "fr" },
+  { name: "Germany", code: "de" },
+  { name: "Greece", code: "gr" },
+  { name: "Hungary", code: "hu" },
+  { name: "Indonesia", code: "id" },
+  { name: "Ireland", code: "ie" },
+  { name: "Italy", code: "it" },
+  { name: "Japan", code: "jp" },
+  { name: "Kazakhstan", code: "kz" },
+  { name: "Kenya", code: "ke" },
+  { name: "Lithuania", code: "lt" },
+  { name: "Malaysia", code: "my" },
+  { name: "Maldives", code: "mv" },
+  { name: "Morocco", code: "ma" },
+  { name: "Nepal", code: "np" },
+  { name: "Netherlands", code: "nl" },
+  { name: "Norway", code: "no" },
+  { name: "Philippines", code: "ph" },
+  { name: "Poland", code: "pl" },
+  { name: "Portugal", code: "pt" },
+  { name: "Qatar", code: "qa" },
+  { name: "Romania", code: "ro" },
+  { name: "Singapore", code: "sg" },
+  { name: "South Africa", code: "za" },
+  { name: "South Korea", code: "kr" },
+  { name: "Spain", code: "es" },
+  { name: "Sri Lanka", code: "lk" },
+  { name: "Switzerland", code: "ch" },
+  { name: "Tajikistan", code: "tj" },
+  { name: "Thailand", code: "th" },
+  { name: "Turkey", code: "tr" },
+  { name: "UAE", code: "ae" },
+  { name: "Uganda", code: "ug" },
+  { name: "United Kingdom", code: "gb" },
+  { name: "USA", code: "us" },
+  { name: "Vietnam", code: "vn" },
+  { name: "Zambia", code: "zm" },
+];
+
 function VisaForm() {
-  // --- State for Countries and Form Data ---
-  const [countries, setCountries] = useState([]);
+  // --- State for Selected Destination ---
   const [selectedDestination, setSelectedDestination] = useState("");
-  const [destinationFlag, setDestinationFlag] = useState(""); // To store the flag url of selected country
-  const [isLoading, setIsLoading] = useState(true);
+  const [destinationFlag, setDestinationFlag] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   const navigate = useNavigate();
 
-  // --- Fetch Countries on Load ---
+  // --- Close dropdown when clicking outside ---
   useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const res = await fetch(
-          "https://restcountries.com/v3.1/all?fields=name,flags"
-        );
-        const data = await res.json();
-        // Sort alphabetically
-        const sorted = data.sort((a, b) =>
-          a.name.common.localeCompare(b.name.common)
-        );
-        setCountries(sorted);
-      } catch (error) {
-        console.error("Error fetching countries:", error);
-      } finally {
-        setIsLoading(false);
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
       }
     };
-    fetchCountries();
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- Handle Dropdown Change ---
-  const handleCountryChange = (e) => {
-    const countryName = e.target.value;
-    setSelectedDestination(countryName);
-
-    // Find the flag for the selected country to display it visually
-    const countryData = countries.find(c => c.name.common === countryName);
-    if (countryData) {
-      setDestinationFlag(countryData.flags.png);
-    } else {
-      setDestinationFlag(""); // Clear flag if "Select Country..." is chosen
-    }
+  // --- Handle Country Select ---
+  const handleCountrySelect = (country) => {
+    setSelectedDestination(country.name);
+    setDestinationFlag(`https://flagcdn.com/w40/${country.code}.png`);
+    setIsOpen(false);
   };
 
   // --- Handle Submit / Navigation ---
   const handleSubmit = () => {
     if (selectedDestination) {
-      // Navigate to the dynamic country page, e.g. /Countries/france
-      navigate(`/Countries/${selectedDestination.toLowerCase()}`);
+      navigate(`/Countries/${selectedDestination.toLowerCase().replace(/\s+/g, "")}`);
     } else {
       alert("Please select a destination country first.");
     }
@@ -85,7 +121,6 @@ function VisaForm() {
               readOnly
               className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 bg-gray-50 rounded-lg focus:outline-none cursor-not-allowed font-semibold text-gray-600"
             />
-            {/* Flag of Pakistan (Hardcoded) */}
             <img
               src="https://flagcdn.com/w40/pk.png"
               alt="PK"
@@ -94,33 +129,24 @@ function VisaForm() {
           </div>
         </div>
 
-        {/* --- "TO" Field (Dropdown with Countries) --- */}
-        <div>
-          <label htmlFor="destination" className="block text-sm font-medium text-gray-700 mb-1">
+        {/* --- "TO" Field (Custom Dropdown with Flags) --- */}
+        <div ref={dropdownRef}>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Destination Country
           </label>
           <div className="relative">
-            <FaMapMarkerAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-
-            <select
-              id="destination"
-              onChange={handleCountryChange}
-              value={selectedDestination}
-              className="w-full h-14 pl-12 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none"
+            <button
+              type="button"
+              onClick={() => setIsOpen((prev) => !prev)}
+              className="w-full h-14 pl-12 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white flex items-center text-left"
             >
-              <option value="">Select Country...</option>
-              {isLoading ? (
-                <option>Loading countries...</option>
-              ) : (
-                countries.map((country) => (
-                  <option key={country.name.common} value={country.name.common}>
-                    {country.name.common}
-                  </option>
-                ))
-              )}
-            </select>
+              <FaMapMarkerAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <span className={selectedDestination ? "text-gray-900" : "text-gray-400"}>
+                {selectedDestination || "Select Country..."}
+              </span>
+            </button>
 
-            {/* Show selected country flag on the right side if selected */}
+            {/* Selected flag, shown on the closed button */}
             {destinationFlag && (
               <img
                 src={destinationFlag}
@@ -129,16 +155,37 @@ function VisaForm() {
               />
             )}
 
-            {/* Custom arrow for select dropdown */}
+            {/* Arrow */}
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              <svg className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
+
+            {/* --- Custom Dropdown List (with flags) --- */}
+            {isOpen && (
+              <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-lg">
+                {countryList.map((country) => (
+                  <button
+                    type="button"
+                    key={country.code}
+                    onClick={() => handleCountrySelect(country)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors ${selectedDestination === country.name ? "bg-blue-100 font-semibold" : ""
+                      }`}
+                  >
+                    <img
+                      src={`https://flagcdn.com/w40/${country.code}.png`}
+                      alt={country.name}
+                      className="w-6 h-4 object-cover rounded-sm border border-gray-200 flex-shrink-0"
+                    />
+                    <span className="text-sm text-gray-800">{country.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 3. Submit Button (Inside Grid or Full Width below?) - Moving below for cleaner look */}
+        {/* 3. Submit Button */}
         <div className="md:col-span-2 mt-4">
-          {/* Added onClick handler to navigate */}
           <button
             onClick={handleSubmit}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg rounded-lg px-8 py-3 transition-colors shadow-lg shadow-blue-500/30"

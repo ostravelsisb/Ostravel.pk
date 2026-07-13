@@ -22,6 +22,72 @@ const navItems = [
   { name: "Haj and Ummrah", to: "/haj" },
 ];
 
+// --- Static Country Data (replaces restcountries.com API — was failing/blocked) ---
+const visaCountryData = {
+  Asia: [
+    { name: "Azerbaijan", code: "az" },
+    { name: "Bahrain", code: "bh" },
+    { name: "China", code: "cn" },
+    { name: "Cambodia", code: "kh" },
+    { name: "Indonesia", code: "id" },
+    { name: "Japan", code: "jp" },
+    { name: "Kazakhstan", code: "kz" },
+    { name: "Malaysia", code: "my" },
+    { name: "Maldives", code: "mv" },
+    { name: "Nepal", code: "np" },
+    { name: "Pakistan", code: "pk" },
+    { name: "Philippines", code: "ph" },
+    { name: "Qatar", code: "qa" },
+    { name: "South Korea", code: "kr" },
+    { name: "Sri Lanka", code: "lk" },
+    { name: "Tajikistan", code: "tj" },
+    { name: "Thailand", code: "th" },
+    { name: "Turkey", code: "tr" },
+    { name: "Vietnam", code: "vn" },
+    { name: "Singapore", code: "sg" },
+    { name: "Morocco", code: "ma" },
+  ],
+  Europe: [
+    { name: "Austria", code: "at" },
+    { name: "Belgium", code: "be" },
+    { name: "Bulgaria", code: "bg" },
+    { name: "Czech Republic", code: "cz" },
+    { name: "Denmark", code: "dk" },
+    { name: "Estonia", code: "ee" },
+    { name: "Finland", code: "fi" },
+    { name: "France", code: "fr" },
+    { name: "Germany", code: "de" },
+    { name: "Greece", code: "gr" },
+    { name: "Hungary", code: "hu" },
+    { name: "Ireland", code: "ie" },
+    { name: "Italy", code: "it" },
+    { name: "Lithuania", code: "lt" },
+    { name: "Netherlands", code: "nl" },
+    { name: "Norway", code: "no" },
+    { name: "Poland", code: "pl" },
+    { name: "Portugal", code: "pt" },
+    { name: "Romania", code: "ro" },
+    { name: "Spain", code: "es" },
+    { name: "Switzerland", code: "ch" },
+    { name: "United Kingdom", code: "gb" },
+  ],
+  Africa: [
+    { name: "Egypt", code: "eg" },
+    { name: "Ethiopia", code: "et" },
+    { name: "Kenya", code: "ke" },
+    { name: "South Africa", code: "za" },
+    { name: "Zambia", code: "zm" },
+    { name: "Uganda", code: "ug" },
+  ],
+};
+
+const fileProcessCountryData = [
+  { name: "United States", code: "us" },
+  { name: "Canada", code: "ca" },
+  { name: "United Kingdom", code: "gb" },
+  { name: "Australia", code: "au" },
+];
+
 // --- 1. Simple Nav Link Component ---
 const SimpleNavLink = ({ item }) => (
   <NavLink
@@ -41,63 +107,10 @@ const SimpleNavLink = ({ item }) => (
 // --- 2. Visa Dropdown Component ---
 const VisaDropdown = () => {
   const [activeCategory, setActiveCategory] = useState("Asia");
-  const [countries, setCountries] = useState({ Asia: [], Europe: [], Africa: [] });
-  const [isLoading, setIsLoading] = useState(true);
-
   const location = useLocation();
   const isActive = location.pathname.startsWith("/visa");
 
-  useEffect(() => {
-    const curatedEuropeNames = new Set([
-      "Austria", "Belgium", "Bulgaria", "CzechRepublic", "Denmark", "Estonia",
-      "Finland", "France", "Germany", "Greece", "Hungary", "Ireland", "Italy",
-      "Lithuania", "Netherlands", "Norway", "Poland", "Portugal", "Romania",
-      "Spain", "Switzerland", "United Kingdom"
-    ]);
-
-    const curatedAsiaNames = new Set([
-      "Azerbaijan", "Bahrain", "China", "Cambodia", "Egypt",
-      "Indonesia", "Japan", "Kazakhstan", "Malaysia", "Maldives", "Nepal",
-      "Pakistan", "Philippines", "Qatar", "South Korea", "Sri Lanka",
-      "Tajikistan", "Thailand", "Turkey", "Vietnam", "Saudi Arabia", "Singapore", "Morocco"
-    ]);
-
-    const curatedAfricaNames = new Set([
-      "Egypt", "Ethiopia", "Kenya", "South Africa", "Zambia", "Uganda", "Sudan"
-    ]);
-
-    const fetchCountries = async () => {
-      setIsLoading(true);
-      try {
-        const [asiaRes, europeRes, africaRes] = await Promise.all([
-          fetch("https://restcountries.com/v3.1/region/asia?fields=name,flags,cca3"),
-          fetch("https://restcountries.com/v3.1/region/europe?fields=name,flags,cca3"),
-          fetch("https://restcountries.com/v3.1/region/africa?fields=name,flags,cca3"),
-        ]);
-
-        const asiaData = await asiaRes.json();
-        const europeData = await europeRes.json();
-        const africaData = await africaRes.json();
-        const sortByName = (a, b) => a.name.common.localeCompare(b.name.common);
-
-        setCountries({
-          Asia: asiaData.filter((c) => curatedAsiaNames.has(c.name.common)).sort(sortByName),
-          Europe: europeData.filter((c) => curatedEuropeNames.has(c.name.common)).sort(sortByName),
-          Africa: africaData.filter((c) => curatedAfricaNames.has(c.name.common)).sort(sortByName),
-        });
-      } catch (error) {
-        console.error("Failed to fetch country data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchCountries();
-  }, []);
-
-  const currentList =
-    activeCategory === "Asia" ? countries.Asia
-      : activeCategory === "Europe" ? countries.Europe
-        : countries.Africa;
+  const currentList = visaCountryData[activeCategory];
 
   return (
     <div className="relative group">
@@ -120,20 +133,20 @@ const VisaDropdown = () => {
           ))}
         </div>
         <div className="w-2/3 h-80 overflow-y-auto p-2">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">Loading...</div>
-          ) : (
-            currentList.map((country) => (
-              <Link
-                key={country.cca3}
-                to={`/Countries/${country.name.common.toLowerCase()}`}
-                className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100"
-              >
-                <img src={country.flags.png} alt={country.name.common} className="w-6 h-4 object-cover rounded-sm border border-gray-300" />
-                <span className="text-sm font-medium">{country.name.common}</span>
-              </Link>
-            ))
-          )}
+          {currentList.map((country) => (
+            <Link
+              key={country.code}
+              to={`/Countries/${country.name.toLowerCase().replace(/\s+/g, "")}`}
+              className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100"
+            >
+              <img
+                src={`https://flagcdn.com/w40/${country.code}.png`}
+                alt={country.name}
+                className="w-6 h-4 object-cover rounded-sm border border-gray-300"
+              />
+              <span className="text-sm font-medium">{country.name}</span>
+            </Link>
+          ))}
         </div>
       </div>
     </div>
@@ -142,26 +155,8 @@ const VisaDropdown = () => {
 
 // --- 3. File Process Dropdown Component ---
 const FileProcessDropdown = () => {
-  const [countries, setCountries] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const location = useLocation();
   const isActive = location.pathname.startsWith("/fileprocessing");
-
-  useEffect(() => {
-    const fetchCountries = async () => {
-      setIsLoading(true);
-      try {
-        const res = await fetch("https://restcountries.com/v3.1/alpha?codes=USA,CAN,GBR,AUS&fields=name,flags,cca3");
-        const data = await res.json();
-        setCountries(data.sort((a, b) => a.name.common.localeCompare(b.name.common)));
-      } catch (error) {
-        console.error("Failed to fetch file process countries:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchCountries();
-  }, []);
 
   return (
     <div className="relative group">
@@ -171,20 +166,20 @@ const FileProcessDropdown = () => {
       </div>
       <div className="absolute top-full left-1/2 -translate-x-1/2 mt-0 pt-2 hidden group-hover:block bg-white shadow-2xl rounded-lg overflow-hidden z-50 w-64 border border-gray-200">
         <div className="overflow-y-auto p-2">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full p-4">Loading...</div>
-          ) : (
-            countries.map((country) => (
-              <Link
-                key={country.cca3}
-                to={`/Countries/${country.name.common.toLowerCase()}`}
-                className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100"
-              >
-                <img src={country.flags.png} alt={country.name.common} className="w-6 h-4 object-cover rounded-sm border border-gray-300" />
-                <span className="text-sm font-medium">{country.name.common}</span>
-              </Link>
-            ))
-          )}
+          {fileProcessCountryData.map((country) => (
+            <Link
+              key={country.code}
+              to={`/Countries/${country.name.toLowerCase().replace(/\s+/g, "-")}`}
+              className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100"
+            >
+              <img
+                src={`https://flagcdn.com/w40/${country.code}.png`}
+                alt={country.name}
+                className="w-6 h-4 object-cover rounded-sm border border-gray-300"
+              />
+              <span className="text-sm font-medium">{country.name}</span>
+            </Link>
+          ))}
         </div>
       </div>
     </div>

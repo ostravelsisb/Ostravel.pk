@@ -51,7 +51,7 @@ export function AuthProvider({ children }) {
           } else {
             // Fallback: Try querying by Email if UID document doesn't exist
             console.log("⚠️ No document found by UID, trying Email query...");
-            const q = query(collection(db, "users"), where("Email", "==", user.email));
+            const q = query(collection(db, "users"), where("email", "==", user.email));
             const querySnapshot = await getDocs(q);
 
             console.log("📊 Email query results - Empty?", querySnapshot.empty);

@@ -5,7 +5,7 @@ import logo from "../assets/logoimg/image.png";
 
 // --- Firebase Helpers ---
 // Importing the helpers we created in firebase.js
-import { signUp, signInWithGoogle } from "../firbase";
+import { signUp, signInWithGoogle, ensureUserDocument } from "../firbase";
 
 // --- Icons ---
 import { FaGoogle, FaFacebookF } from "react-icons/fa";
@@ -80,7 +80,10 @@ function Signup() {
     setLoading(true);
 
     try {
-      await signInWithGoogle();
+      const userCred = await signInWithGoogle();
+      // Google sign-in doesn't go through signUp(), so create the Firestore
+      // "users" document here (only if one doesn't already exist).
+      await ensureUserDocument(userCred.user);
       navigate("/");
     } catch (err) {
       console.error("Google Signup Error:", err);

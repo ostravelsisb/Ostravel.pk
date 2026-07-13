@@ -48,7 +48,7 @@ const storage = getStorage(app);
 
 // --- Auth Helpers ---
 
-import { doc, setDoc } from "firebase/firestore"; // Import setDoc
+import { doc, setDoc, getDoc } from "firebase/firestore"; // Import setDoc, getDoc
 
 const signUp = async (email, password, displayName) => {
   const userCred = await createUserWithEmailAndPassword(auth, email, password);
@@ -76,6 +76,41 @@ const signUp = async (email, password, displayName) => {
   }
 
   return userCred;
+};
+
+/**
+ * Ensure a Firestore "users" document exists for a given Firebase Auth user.
+ * Used for Google sign-in/sign-up, since that flow does not go through signUp().
+ * Will NOT overwrite an existing document (so logging in again won't reset role/isActive).
+ * @param {import("firebase/auth").User} user - Firebase Auth user object
+ * @param {string} [displayNameOverride] - Optional display name to use if creating a new doc
+ * @returns {Promise<boolean>} true if a new document was created, false if one already existed
+ */
+const ensureUserDocument = async (user, displayNameOverride) => {
+  if (!user) return false;
+
+  try {
+    const userDocRef = doc(db, "users", user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+      return false; // Already has a document, don't overwrite
+    }
+
+    await setDoc(userDocRef, {
+      uid: user.uid,
+      email: user.email || "",
+      displayName: displayNameOverride || user.displayName || "",
+      role: "user", // Default role
+      createdAt: new Date().toISOString(),
+      isActive: true
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Error ensuring user document:", error);
+    throw error; // Let the caller decide how to surface this
+  }
 };
 
 /**
@@ -145,5 +180,6 @@ export {
   signOut,
   onAuthStateChanged,
   sendResetEmail,
-  createSubAdmin // <--- Sub-admin creation
+  createSubAdmin, // <--- Sub-admin creation
+  ensureUserDocument // <--- Creates Firestore user doc for Google sign-in/sign-up
 };

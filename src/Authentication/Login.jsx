@@ -8,7 +8,7 @@ import { FaGoogle, FaFacebookF } from "react-icons/fa";
 import { MdEmail, MdLock } from "react-icons/md";
 
 // --- Firebase Helpers ---
-import { signIn, signInWithGoogle, db } from "../firbase";
+import { signIn, signInWithGoogle, ensureUserDocument, db } from "../firbase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
 // --- Animation Variants ---
@@ -66,7 +66,7 @@ function Login() {
 
       // Check Role for Redirect
       try {
-        const q = query(collection(db, "users"), where("Email", "==", email));
+        const q = query(collection(db, "users"), where("email", "==", email));
         const querySnapshot = await getDocs(q);
         let role = "user";
         if (!querySnapshot.empty) {
@@ -106,11 +106,15 @@ function Login() {
 
     try {
       const userCred = await signInWithGoogle();
+      const user = userCred.user;
+
+      // Safety net: if this Google account was created before the Firestore
+      // doc-creation fix (or somehow still has no doc), create one now.
+      await ensureUserDocument(user);
 
       // Check Role for Redirect (same as email/password login)
       try {
-        const user = userCred.user;
-        const q = query(collection(db, "users"), where("Email", "==", user.email));
+        const q = query(collection(db, "users"), where("email", "==", user.email));
         const querySnapshot = await getDocs(q);
         let role = "user";
 

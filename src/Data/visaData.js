@@ -83,7 +83,7 @@ export const visaCountriesData = {
         visaTypes: [
             {
                 type: "Tourist Visa",
-                fee: 1,
+                fee: 10,
                 processingTime: "10-15 Working Days",
                 urgentProcessingTime: "5-7 Working Days",
                 validity: "3 Months",

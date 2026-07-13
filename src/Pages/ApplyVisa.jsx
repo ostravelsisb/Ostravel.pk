@@ -8,9 +8,8 @@ import {
 } from 'react-icons/fa';
 import { getAllCountryNames, getVisaDataByCountry, calculateTotalFee } from '../Data/visaData';
 
-// Firebase Imports
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { storage } from "../firbase";
+// ImgBB Config (replaces Firebase Storage — was returning 403 Forbidden)
+const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
 
 function ApplyVisa() {
     const navigate = useNavigate();
@@ -64,9 +63,10 @@ function ApplyVisa() {
             return;
         }
 
-        const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+        // imgbb only accepts image files — PDF removed
+        const allowedTypes = ['image/jpeg', 'image/png'];
         if (!allowedTypes.includes(file.type)) {
-            setErrors(prev => ({ ...prev, [fieldName]: 'JPG, PNG, or PDF only' }));
+            setErrors(prev => ({ ...prev, [fieldName]: 'JPG or PNG only' }));
             return;
         }
 
@@ -74,23 +74,39 @@ function ApplyVisa() {
         setErrors(prev => ({ ...prev, [fieldName]: '' }));
     };
 
+    // Uploads a file to imgbb and returns the hosted image URL
     const uploadFileToCloud = (file, appNum, type) => {
         return new Promise((resolve, reject) => {
-            const storageRef = ref(storage, `visa-documents/${currentUser.uid}/${appNum}/${type}`);
-            const metadata = { contentType: file.type };
-            const uploadTask = uploadBytesResumable(storageRef, file, metadata);
+            const form = new FormData();
+            form.append("image", file);
+            form.append("name", `${appNum}_${type}`);
 
-            uploadTask.on('state_changed',
-                (snap) => {
-                    const prog = (snap.bytesTransferred / snap.totalBytes) * 100;
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`);
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const prog = (event.loaded / event.total) * 100;
                     setUploadProgress(prev => ({ ...prev, [type]: Math.round(prog) }));
-                },
-                (err) => reject(err),
-                async () => {
-                    const url = await getDownloadURL(uploadTask.snapshot.ref);
-                    resolve(url);
                 }
-            );
+            };
+
+            xhr.onload = () => {
+                try {
+                    const res = JSON.parse(xhr.responseText);
+                    if (res.success) {
+                        setUploadProgress(prev => ({ ...prev, [type]: 100 }));
+                        resolve(res.data.url);
+                    } else {
+                        reject(new Error(res.error?.message || 'Upload failed'));
+                    }
+                } catch {
+                    reject(new Error('Invalid response from image host'));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(form);
         });
     };
 
@@ -241,6 +257,7 @@ function ApplyVisa() {
                         {loading ? 'Uploading Files...' : 'Proceed to Payment'}
                         {!loading && <FaArrowRight />}
                     </button>
+                    {errors.submit && <p className="text-center text-sm text-red-600 font-bold">{errors.submit}</p>}
                 </motion.form>
             </div>
 
@@ -292,11 +309,11 @@ const FileUploadField = ({ name, label, file, progress, error, onChange, demoLin
             )}
         </div>
         <div className={`relative border-2 border-dashed rounded-xl p-4 transition-all ${error ? 'border-red-500 bg-red-50' : file ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400'}`}>
-            <input type="file" id={name} onChange={onChange} className="hidden" accept="image/jpeg,image/png,application/pdf" />
+            <input type="file" id={name} onChange={onChange} className="hidden" accept="image/jpeg,image/png" />
             <label htmlFor={name} className="cursor-pointer flex items-center justify-between">
                 <div>
                     <p className="text-sm font-bold text-slate-800 truncate max-w-[200px]">{file ? file.name : 'Click to upload scan'}</p>
-                    <p className="text-xs text-slate-500">{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : '1MB - 10MB (JPG, PNG, PDF)'}</p>
+                    <p className="text-xs text-slate-500">{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : '1MB - 10MB (JPG, PNG)'}</p>
                 </div>
                 {file && <FaCheckCircle className="text-emerald-500 text-xl" />}
             </label>

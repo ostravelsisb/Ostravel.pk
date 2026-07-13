@@ -188,9 +188,12 @@ export default function SubAdminPanel() {
                 const snapshot = await getDocs(q);
                 const allVisas = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                // Filter for assigned countries only
+                // Filter for assigned countries only (case-insensitive —
+                // stored country is a lowercase key e.g. "japan" while
+                // assignedCountries holds display names e.g. "Japan")
+                const assignedLower = assignedCountries.map(c => c.toLowerCase());
                 const filteredVisas = allVisas.filter(visa =>
-                    assignedCountries.includes(visa.country)
+                    assignedLower.includes((visa.country || "").toLowerCase())
                 );
 
                 setVisas(filteredVisas);
@@ -388,7 +391,7 @@ export default function SubAdminPanel() {
                                     <div key={country} className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-xl border border-blue-100">
                                         <p className="font-bold text-slate-800">{country}</p>
                                         <p className="text-xs text-slate-500 mt-1">
-                                            {visas.filter(v => v.country === country).length} applications
+                                            {visas.filter(v => (v.country || "").toLowerCase() === country.toLowerCase()).length} applications
                                         </p>
                                     </div>
                                 ))}

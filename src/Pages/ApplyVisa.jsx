@@ -58,8 +58,8 @@ function ApplyVisa() {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (file.size < 1 * 1024 * 1024 || file.size > 10 * 1024 * 1024) {
-            setErrors(prev => ({ ...prev, [fieldName]: 'Size must be 1MB - 10MB' }));
+        if (file.size < 10 * 1024 || file.size > 10 * 1024 * 1024) {
+            setErrors(prev => ({ ...prev, [fieldName]: 'Size must be 10KB - 10MB' }));
             return;
         }
 
@@ -313,7 +313,7 @@ const FileUploadField = ({ name, label, file, progress, error, onChange, demoLin
             <label htmlFor={name} className="cursor-pointer flex items-center justify-between">
                 <div>
                     <p className="text-sm font-bold text-slate-800 truncate max-w-[200px]">{file ? file.name : 'Click to upload scan'}</p>
-                    <p className="text-xs text-slate-500">{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : '1MB - 10MB (JPG, PNG)'}</p>
+                    <p className="text-xs text-slate-500">{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : '10KB - 10MB (JPG, PNG)'}</p>
                 </div>
                 {file && <FaCheckCircle className="text-emerald-500 text-xl" />}
             </label>

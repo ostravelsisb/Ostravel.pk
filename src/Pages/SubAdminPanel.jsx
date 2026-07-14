@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import DocumentViewer from "../Components/DocumentViewer";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUtils";
+import { sendStatusChangeEmail, sendEditAccessEmail } from "../Utils/emailService";
 import { logStatusChange, logVisaEdit } from "../Utils/activityLogger";
 
 // --- SUB-COMPONENT: LIVE ACTION PANEL ---
@@ -28,6 +29,16 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
         try {
             await toggleEditApproval(item.id, collectionName, nextState, currentUser.email);
             onLocalUpdate(item.id, { editApproved: nextState });
+            if (collectionName === "visaApplications") {
+                sendEditAccessEmail({
+                    to: item.email,
+                    applicantName: item.applicantName,
+                    applicationNumber: item.applicationNumber,
+                    country: item.country,
+                    editEnabled: nextState,
+                    reason: msg,
+                });
+            }
         } catch (e) { alert("Toggle failed"); }
         setIsToggling(false);
     };
@@ -89,7 +100,7 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
 };
 
 // --- SUB-COMPONENT: STATUS SELECT ---
-const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, country, currentUser, userRole }) => {
+const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, country, currentUser, userRole, applicant }) => {
     const [loading, setLoading] = useState(false);
     const options = ["Doc Received", "Analyzing", "Approved", "Rejected"];
 
@@ -118,6 +129,18 @@ const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, country, 
             });
 
             onUpdate(id, { status: val });
+
+            if (applicant) {
+                sendStatusChangeEmail({
+                    to: applicant.email,
+                    applicantName: applicant.applicantName,
+                    applicationNumber: applicant.applicationNumber,
+                    country: applicant.country,
+                    visaType: applicant.visaType,
+                    oldStatus,
+                    newStatus: val,
+                });
+            }
         } catch (e) { console.error(e); }
         setLoading(false);
     };
@@ -597,6 +620,7 @@ export default function SubAdminPanel() {
                                                     country={v.country}
                                                     currentUser={currentUser}
                                                     userRole={userRole}
+                                                    applicant={v}
                                                 />
                                             </td>
                                             <td className="p-5">

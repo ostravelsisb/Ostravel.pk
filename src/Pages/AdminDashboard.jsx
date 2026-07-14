@@ -18,6 +18,7 @@ import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUtils";
+import { sendStatusChangeEmail, sendEditAccessEmail } from "../Utils/emailService";
 
 // --- SUB-COMPONENT: LIVE ACTION PANEL ---
 const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
@@ -31,6 +32,16 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
         try {
             await toggleEditApproval(item.id, collectionName, nextState, 'admin@ostravels.com');
             onLocalUpdate(item.id, { editApproved: nextState });
+            if (collectionName === "visaApplications") {
+                sendEditAccessEmail({
+                    to: item.email,
+                    applicantName: item.applicantName,
+                    applicationNumber: item.applicationNumber,
+                    country: item.country,
+                    editEnabled: nextState,
+                    reason: msg,
+                });
+            }
         } catch (e) { alert("Toggle failed"); }
         setIsToggling(false);
     };
@@ -92,7 +103,7 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
 };
 
 // --- SUB-COMPONENT: STATUS SELECT ---
-const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = false }) => {
+const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = false, applicant }) => {
     const [loading, setLoading] = useState(false);
     const options = isVisa
         ? ["Doc Received", "Analyzing", "Approved", "Rejected"]
@@ -100,10 +111,22 @@ const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = 
 
     const handleChange = async (e) => {
         const val = e.target.value;
+        const oldStatus = currentStatus;
         setLoading(true);
         try {
             await updateDoc(doc(db, collectionName, id), { status: val, updatedAt: serverTimestamp() });
             onUpdate(id, { status: val });
+            if (isVisa && applicant) {
+                sendStatusChangeEmail({
+                    to: applicant.email,
+                    applicantName: applicant.applicantName,
+                    applicationNumber: applicant.applicationNumber,
+                    country: applicant.country,
+                    visaType: applicant.visaType,
+                    oldStatus,
+                    newStatus: val,
+                });
+            }
         } catch (e) { console.error(e); }
         setLoading(false);
     };
@@ -395,7 +418,7 @@ export default function AdminDashboard() {
                                 <tr key={v.id} className="border-b border-slate-100 last:border-0">
                                     <td className="p-5"><p className="font-bold text-slate-800">{v.applicantName}</p><p className="text-[10px] text-slate-400 font-bold">{v.email}</p></td>
                                     <td className="p-5"><p className="text-xs font-bold text-slate-600">{v.country}</p><p className="text-[9px] font-black text-blue-500 uppercase">{v.visaType}</p></td>
-                                    <td className="p-5"><StatusDropdown id={v.id} currentStatus={v.status} collectionName="visaApplications" onUpdate={(id, up) => updateLocal('visa', id, up)} isVisa /></td>
+                                    <td className="p-5"><StatusDropdown id={v.id} currentStatus={v.status} collectionName="visaApplications" onUpdate={(id, up) => updateLocal('visa', id, up)} isVisa applicant={v} /></td>
                                     <td className="p-5"><LiveActionPanel item={v} collectionName="visaApplications" onLocalUpdate={(id, up) => updateLocal('visa', id, up)} /></td>
                                     <td className="p-5"><button onClick={() => setSelectedDoc(v)} className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><MdVisibility className="text-xl" /></button></td>
                                 </tr>

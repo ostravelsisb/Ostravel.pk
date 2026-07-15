@@ -32,6 +32,50 @@ import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUt
 import { sendStatusChangeEmail, sendEditAccessEmail, sendUmrahStatusEmail, sendUmrahMessageEmail, sendAdminMessageEmail } from "../Utils/emailService";
 import ToastContainer, { notify } from "../Components/Toast";
 
+
+// ─── SHARED PAGINATION COMPONENT ─────────────────────────────────────────────
+const ITEMS_PER_PAGE = 10;
+
+function Pagination({ total, page, onChange }) {
+    const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+    if (totalPages <= 1) return null;
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+    return (
+        <div className="flex items-center justify-center gap-1.5 pt-4 mt-2">
+            <button
+                onClick={() => onChange(page - 1)}
+                disabled={page === 1}
+                className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-orange-50 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold text-base"
+            >
+                ‹
+            </button>
+            {pages.map(p => (
+                <button
+                    key={p}
+                    onClick={() => onChange(p)}
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl text-sm font-bold border transition-all ${
+                        p === page
+                            ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-200"
+                            : "border-gray-200 text-gray-500 hover:bg-orange-50 hover:text-orange-500"
+                    }`}
+                >
+                    {p}
+                </button>
+            ))}
+            <button
+                onClick={() => onChange(page + 1)}
+                disabled={page === totalPages}
+                className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-orange-50 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold text-base"
+            >
+                ›
+            </button>
+            <span className="ml-3 text-[12px] font-bold text-gray-400">
+                Page {page} of {totalPages} · {total} total
+            </span>
+        </div>
+    );
+}
+
 // ─── ANIMATION VARIANTS ───────────────────────────────────────────────────────
 const fadeUp = {
     hidden: { opacity: 0, y: 20 },
@@ -348,8 +392,12 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
     const [search, setSearch] = useState("");
     const [expandedId, setExpandedId] = useState(null);
     const [filterStatus, setFilterStatus] = useState("All");
+    const [page, setPage] = useState(1);
 
     const statuses = ["All", "Pending", "Investigating", "Processing", "Completed", "Cancelled"];
+
+    // Reset to page 1 whenever filters change
+    useEffect(() => { setPage(1); }, [search, filterStatus]);
 
     const filtered = useMemo(() => {
         return inquiries.filter(u => {
@@ -362,6 +410,11 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
             return matchSearch && matchStatus;
         });
     }, [inquiries, search, filterStatus]);
+
+    const paginatedUmrah = useMemo(() => {
+        const start = (page - 1) * ITEMS_PER_PAGE;
+        return filtered.slice(start, start + ITEMS_PER_PAGE);
+    }, [filtered, page]);
 
     const counts = useMemo(() => {
         const c = { All: inquiries.length };
@@ -433,7 +486,7 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
                         <p className="text-gray-500 font-bold">No queries found</p>
                         <p className="text-sm text-gray-400 mt-1">Try adjusting your search or filter</p>
                     </motion.div>
-                ) : filtered.map((u) => {
+                ) : paginatedUmrah.map((u) => {
                     const isOpen = expandedId === u.id;
                     const statusStyle = UMRAH_STATUS_STYLES[u.status || "Pending"] || UMRAH_STATUS_STYLES["Pending"];
                     const meta = [
@@ -517,6 +570,7 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
                     );
                 })}
             </motion.div>
+            <Pagination total={filtered.length} page={page} onChange={setPage} />
         </motion.div>
 
     );
@@ -526,6 +580,9 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
 function MessagesTab({ messages }) {
     const [search, setSearch] = useState("");
     const [selectedMsg, setSelectedMsg] = useState(null);
+    const [page, setPage] = useState(1);
+
+    useEffect(() => { setPage(1); }, [search]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -537,6 +594,11 @@ function MessagesTab({ messages }) {
             (m.message || "").toLowerCase().includes(q)
         );
     }, [messages, search]);
+
+    const paginatedMessages = useMemo(() => {
+        const start = (page - 1) * ITEMS_PER_PAGE;
+        return filtered.slice(start, start + ITEMS_PER_PAGE);
+    }, [filtered, page]);
 
     const formatDate = (ts) => {
         if (!ts) return "—";
@@ -599,7 +661,7 @@ function MessagesTab({ messages }) {
                             </div>
                             <p className="text-gray-500 font-bold">No messages found</p>
                         </motion.div>
-                    ) : filtered.map((m, idx) => (
+                    ) : paginatedMessages.map((m, idx) => (
                         <motion.button
                             key={m.id}
                             variants={fadeUp}
@@ -628,6 +690,7 @@ function MessagesTab({ messages }) {
                             </div>
                         </motion.button>
                     ))}
+                    <Pagination total={filtered.length} page={page} onChange={setPage} />
                 </motion.div>
 
                 {/* Detail Panel */}
@@ -788,6 +851,8 @@ export default function AdminDashboard() {
     const [overallPeriod, setOverallPeriod] = useState("Last 6 Months");
     const [showSalesDropdown, setShowSalesDropdown] = useState(false);
     const [showOverallDropdown, setShowOverallDropdown] = useState(false);
+    const [allowedEditPage, setAllowedEditPage] = useState(1);
+    const [recentEditPage, setRecentEditPage] = useState(1);
     const { currentUser } = useAuth();
     const navigate = useNavigate();
 
@@ -1355,8 +1420,9 @@ export default function AdminDashboard() {
                                 {visas.filter(v => v.editApproved && !v.userConfirmed).length === 0 ? (
                                     <div className="text-center py-12"><MdLockOpen className="text-gray-200 text-5xl mx-auto mb-3" /><p className="text-gray-500 font-bold">No edit-allowed applications</p></div>
                                 ) : (
+                                    <>
                                     <div className="space-y-3">
-                                        {visas.filter(v => v.editApproved && !v.userConfirmed).slice(0, 10).map(visa => (
+                                        {visas.filter(v => v.editApproved && !v.userConfirmed).slice((allowedEditPage-1)*ITEMS_PER_PAGE, allowedEditPage*ITEMS_PER_PAGE).map(visa => (
                                             <div key={visa.id} className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-100">
                                                 <div className="flex items-center gap-4 flex-1">
                                                     <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center"><FaPassport className="text-emerald-600" /></div>
@@ -1370,6 +1436,8 @@ export default function AdminDashboard() {
                                             </div>
                                         ))}
                                     </div>
+                                    <Pagination total={visas.filter(v => v.editApproved && !v.userConfirmed).length} page={allowedEditPage} onChange={setAllowedEditPage} />
+                                    </>
                                 )}
                             </div>
 
@@ -1384,8 +1452,9 @@ export default function AdminDashboard() {
                                 {visas.filter(v => v.userConfirmed).length === 0 ? (
                                     <div className="text-center py-12"><MdCheckCircle className="text-gray-200 text-5xl mx-auto mb-3" /><p className="text-gray-500 font-bold">No recently edited applications</p></div>
                                 ) : (
+                                    <>
                                     <div className="space-y-3">
-                                        {visas.filter(v => v.userConfirmed).slice(0, 10).map(visa => (
+                                        {visas.filter(v => v.userConfirmed).slice((recentEditPage-1)*ITEMS_PER_PAGE, recentEditPage*ITEMS_PER_PAGE).map(visa => (
                                             <div key={visa.id} className="flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-100">
                                                 <div className="flex items-center gap-4 flex-1">
                                                     <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center"><FaPassport className="text-blue-500" /></div>
@@ -1403,6 +1472,8 @@ export default function AdminDashboard() {
                                             </div>
                                         ))}
                                     </div>
+                                    <Pagination total={visas.filter(v => v.userConfirmed).length} page={recentEditPage} onChange={setRecentEditPage} />
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -1517,6 +1588,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
     const [search, setSearch] = useState(initialSearch);
     const [statusFilter, setStatusFilter] = useState("All");
     const [countryFilter, setCountryFilter] = useState("All");
+    const [page, setPage] = useState(1);
 
     // Derive unique countries from visa data
     const allCountries = useMemo(() => {
@@ -1532,6 +1604,8 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
         rejected: visas.filter(v => v.status === "Rejected").length,
     }), [visas]);
 
+    useEffect(() => { setPage(1); }, [search, statusFilter, countryFilter]);
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return visas.filter(v => {
@@ -1545,6 +1619,11 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
             return matchStatus && matchCountry && matchSearch;
         });
     }, [visas, search, statusFilter, countryFilter]);
+
+    const paginatedVisas = useMemo(() => {
+        const start = (page - 1) * ITEMS_PER_PAGE;
+        return filtered.slice(start, start + ITEMS_PER_PAGE);
+    }, [filtered, page]);
 
     return (
         <div className="space-y-5">
@@ -1653,7 +1732,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                         </p>
                     </div>
                 ) : (
-                    filtered.map(v => (
+                    paginatedVisas.map(v => (
                         <motion.div
                             key={v.id}
                             initial={{ opacity: 0, y: 10 }}
@@ -1722,6 +1801,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                     ))
                 )}
             </div>
+            <Pagination total={filtered.length} page={page} onChange={setPage} />
         </div>
     );
 }

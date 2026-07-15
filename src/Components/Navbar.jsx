@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import logo from "../assets/logoimg/image.png";
+import logo from "../assets/logoimg/logo.webp";
 
 // --- Framer Motion & Icons ---
 import { motion, AnimatePresence } from "framer-motion";
@@ -231,13 +231,18 @@ function Navbar() {
         <div className="hidden lg:flex justify-between w-full max-w-7xl items-center">
           <div className="flex gap-8 xl:gap-12 items-center">
             <Link to="/">
-              <motion.img
+              <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                src={logo}
-                alt="OS Logo Image"
-                className="w-[120px] h-[50px] object-contain"
-              />
+                className="flex items-center gap-3"
+              >
+                <img src={logo} alt="OS Logo" className="w-[84px] h-[84px] object-contain" />
+                <div className="w-px h-8 bg-gray-300" />
+                <span className="text-lg font-extrabold tracking-tight">
+                  <span className="text-blue-600">O.S</span>
+                  <span className="text-blue-600"> Travel & Tours</span>
+                </span>
+              </motion.div>
             </Link>
             {/* Nav Items */}
             <div className="flex gap-6 xl:gap-8 items-center cursor-pointer">
@@ -324,7 +329,11 @@ function Navbar() {
           <div className="w-8"></div>
           <div className="flex-1 flex justify-center">
             <Link to="/">
-              <img src={logo} alt="OS Logo Image" className="w-[100px] h-10 object-contain" />
+              <div className="flex items-center gap-2">
+                <img src={logo} alt="OS Logo" className="w-[36px] h-[36px] object-contain" />
+                <div className="w-px h-7 bg-gray-300" />
+                <span className="text-base font-extrabold tracking-tight text-blue-600">O.S Travel & Tours</span>
+              </div>
             </Link>
           </div>
           <button
@@ -350,7 +359,11 @@ function Navbar() {
             {/* 1. Mobile Menu Header (Logo + Close Button) */}
             <div className="flex justify-between items-center w-full h-20 px-4 md:px-6 border-b border-gray-100 flex-none">
               <div className="flex-1 flex justify-start">
-                <img src={logo} alt="OS Logo" className="w-[100px] h-10 object-contain" />
+                <div className="flex items-center gap-2">
+                  <img src={logo} alt="OS Logo" className="w-[36px] h-[36px] object-contain" />
+                  <div className="w-px h-7 bg-gray-300" />
+                  <span className="text-base font-extrabold tracking-tight text-blue-600">O.S Travel & Tours</span>
+                </div>
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}

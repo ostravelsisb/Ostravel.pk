@@ -138,3 +138,29 @@ export const sendUmrahMessageEmail = async ({
         console.error("Failed to send umrah message email:", err);
     }
 };
+export const sendDocumentVerifiedEmail = async ({
+    to,
+    applicantName,
+    applicationNumber,
+    country,
+    docLabel,
+    allVerified,
+}) => {
+    if (!to) return;
+    try {
+        await fetch(`${EMAIL_API_BASE}/verify-document`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                to,
+                applicantName,
+                applicationNumber,
+                country,
+                docLabel,
+                allVerified,
+            }),
+        });
+    } catch (err) {
+        console.error("Failed to send document-verified email:", err);
+    }
+};

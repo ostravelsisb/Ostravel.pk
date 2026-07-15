@@ -7,7 +7,7 @@ import { ref, listAll, getDownloadURL, deleteObject } from "firebase/storage";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { storage, db } from "../firbase";
 import { notify } from "./Toast";
-import { sendAdminMessageEmail } from "../Utils/emailService";
+import { sendAdminMessageEmail, sendDocumentVerifiedEmail } from "../Utils/emailService";
 
 const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
     const [selectedDoc, setSelectedDoc] = useState(null);
@@ -77,12 +77,27 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
     const verifiedCount = docCategories.filter(d => verifiedDocs[d.key]).length;
 
     const handleVerifyDocument = (docKey) => {
+        const isNowVerified = !verifiedDocs[docKey];
         const newVerifiedDocs = {
             ...verifiedDocs,
-            [docKey]: !verifiedDocs[docKey]
+            [docKey]: isNowVerified
         };
         setVerifiedDocs(newVerifiedDocs);
         if (onVerifyDocument) onVerifyDocument(visa.id, newVerifiedDocs);
+
+        // Only send email when marking as verified (not when un-verifying)
+        if (isNowVerified && visa.email) {
+            const docItem = docCategories.find(d => d.key === docKey);
+            const allVerified = docCategories.every(d => d.key === docKey ? true : newVerifiedDocs[d.key]);
+            sendDocumentVerifiedEmail({
+                to: visa.email,
+                applicantName: visa.applicantName,
+                applicationNumber: visa.applicationNumber,
+                country: visa.country,
+                docLabel: docItem?.label || docKey,
+                allVerified,
+            });
+        }
     };
 
     const handleDeleteDocument = async (docKey) => {

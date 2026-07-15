@@ -25,6 +25,50 @@ import { sendStatusChangeEmail, sendEditAccessEmail, sendAdminMessageEmail } fro
 import ToastContainer, { notify } from "../Components/Toast";
 import { logStatusChange, logVisaEdit } from "../Utils/activityLogger";
 
+
+// ─── SHARED PAGINATION COMPONENT ─────────────────────────────────────────────
+const ITEMS_PER_PAGE = 10;
+
+function Pagination({ total, page, onChange }) {
+    const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+    if (totalPages <= 1) return null;
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+    return (
+        <div className="flex items-center justify-center gap-1.5 pt-4 mt-2">
+            <button
+                onClick={() => onChange(page - 1)}
+                disabled={page === 1}
+                className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-orange-50 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold text-base"
+            >
+                ‹
+            </button>
+            {pages.map(p => (
+                <button
+                    key={p}
+                    onClick={() => onChange(p)}
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl text-sm font-bold border transition-all ${
+                        p === page
+                            ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-200"
+                            : "border-gray-200 text-gray-500 hover:bg-orange-50 hover:text-orange-500"
+                    }`}
+                >
+                    {p}
+                </button>
+            ))}
+            <button
+                onClick={() => onChange(page + 1)}
+                disabled={page === totalPages}
+                className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-orange-50 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold text-base"
+            >
+                ›
+            </button>
+            <span className="ml-3 text-[12px] font-bold text-gray-400">
+                Page {page} of {totalPages} · {total} total
+            </span>
+        </div>
+    );
+}
+
 // --- MODERN COUNTRY DROPDOWN ---
 const ModernCountryDropdown = ({ value, onChange, options, assignedCountries }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -358,6 +402,7 @@ export default function SubAdminPanel() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [showNotifDropdown, setShowNotifDropdown] = useState(false);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+    const [visaPage, setVisaPage] = useState(1);
     const notifRef = React.useRef(null);
     const profileRef = React.useRef(null);
 
@@ -525,6 +570,14 @@ export default function SubAdminPanel() {
             return appDate >= start && appDate <= end;
         });
     }, [visas, statusFilter, countryFilter, startDate, endDate]);
+
+    // Reset visa page when filters change
+    useEffect(() => { setVisaPage(1); }, [statusFilter, countryFilter, startDate, endDate]);
+
+    const paginatedVisas = useMemo(() => {
+        const start = (visaPage - 1) * ITEMS_PER_PAGE;
+        return filteredVisas.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredVisas, visaPage]);
 
     const navItems = [
         { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
@@ -1465,7 +1518,7 @@ export default function SubAdminPanel() {
                                         </p>
                                     </div>
                                 ) : (
-                                    filteredVisas.map(v => (
+                                    paginatedVisas.map(v => (
                                         <motion.div
                                             key={v.id}
                                             initial={{ opacity: 0, y: 10 }}
@@ -1538,6 +1591,7 @@ export default function SubAdminPanel() {
                                     ))
                                 )}
                             </div>
+                            <Pagination total={filteredVisas.length} page={visaPage} onChange={setVisaPage} />
                         </div>
                     )}
                 </main>

@@ -2,13 +2,20 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     MdDashboard, MdLogout, MdVisibility, MdCheckCircle,
-    MdLockOutline, MdLockOpen, MdPerson, MdPublic
+    MdLockOutline, MdLockOpen, MdPerson, MdPublic,
+    MdNotificationsNone, MdMenu, MdSearch, MdClear,
+    MdKeyboardArrowDown, MdMessage, MdSwapHoriz, MdReceipt,
+    MdOutlineContentCopy, MdOutlineCreditCard
 } from "react-icons/md";
 import { FaUserShield, FaPassport, FaRegPaperPlane } from "react-icons/fa";
 import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp, where } from "firebase/firestore";
 import { db, signOut } from "../firbase";
 import { useAuth } from "../Context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+    ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+    RadialBarChart, RadialBar
+} from "recharts";
 
 // External Components
 import DocumentViewer from "../Components/DocumentViewer";
@@ -16,6 +23,183 @@ import EditHistoryModal from "../Components/EditHistoryModal";
 import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUtils";
 import { sendStatusChangeEmail, sendEditAccessEmail } from "../Utils/emailService";
 import { logStatusChange, logVisaEdit } from "../Utils/activityLogger";
+
+// --- MODERN COUNTRY DROPDOWN ---
+const ModernCountryDropdown = ({ value, onChange, options, assignedCountries }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = React.useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsOpen(!isOpen)}
+                className="appearance-none bg-gradient-to-r from-white to-gray-50 border-2 border-gray-200 hover:border-orange-300 rounded-2xl pl-4 pr-4 py-2.5 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-orange-400 outline-none cursor-pointer transition-all duration-200 flex items-center gap-2 min-w-[180px] justify-between shadow-sm hover:shadow-md"
+            >
+                <span className="truncate">{value === "All" ? "All Countries" : value}</span>
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <MdKeyboardArrowDown className="text-lg text-gray-400" />
+                </motion.div>
+            </motion.button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -12, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden"
+                    >
+                        <div className="p-2 space-y-1 max-h-64 overflow-y-auto">
+                            {/* All Countries Option */}
+                            <motion.button
+                                whileHover={{ backgroundColor: "#FEF3C7" }}
+                                onClick={() => {
+                                    onChange({ target: { value: "All" } });
+                                    setIsOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+                                    value === "All"
+                                        ? "bg-orange-500 text-white shadow-md shadow-orange-200"
+                                        : "text-gray-700 hover:bg-orange-50"
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${value === "All" ? "bg-white" : "bg-orange-500"}`} />
+                                    All Countries
+                                </div>
+                            </motion.button>
+
+                            {/* Divider */}
+                            <div className="my-1 border-t border-gray-100" />
+
+                            {/* Country Options */}
+                            {assignedCountries.map(country => (
+                                <motion.button
+                                    key={country}
+                                    whileHover={{ backgroundColor: "#FEF3C7" }}
+                                    onClick={() => {
+                                        onChange({ target: { value: country } });
+                                        setIsOpen(false);
+                                    }}
+                                    className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+                                        value === country
+                                            ? "bg-orange-500 text-white shadow-md shadow-orange-200"
+                                            : "text-gray-700 hover:bg-orange-50"
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${value === country ? "bg-white" : "bg-orange-500"}`} />
+                                        {country}
+                                    </div>
+                                </motion.button>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+// --- MODERN STATUS DROPDOWN ---
+const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = React.useRef(null);
+    const options = ["Doc Received", "Analyzing", "Approved", "Rejected"];
+
+    const statusColors = {
+        "Doc Received": { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200", dot: "bg-sky-500" },
+        "Analyzing": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
+        "Approved": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
+        "Rejected": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
+    };
+
+    const currentColor = statusColors[currentStatus || "Doc Received"];
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => !loading && setIsOpen(!isOpen)}
+                disabled={loading}
+                className={`appearance-none bg-gradient-to-r from-white to-gray-50 border-2 ${currentColor.border} rounded-xl px-4 py-1.5 text-[13px] font-bold ${currentColor.text} outline-none cursor-pointer transition-all duration-200 flex items-center gap-2 min-w-[140px] justify-between shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+                <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${currentColor.dot}`} />
+                    <span>{currentStatus || "Doc Received"}</span>
+                </div>
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    {loading ? (
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-current border-t-transparent" />
+                    ) : (
+                        <MdKeyboardArrowDown className="text-base" />
+                    )}
+                </motion.div>
+            </motion.button>
+
+            <AnimatePresence>
+                {isOpen && !loading && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -12, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden"
+                    >
+                        <div className="p-1.5 space-y-0.5">
+                            {options.map(status => {
+                                const colors = statusColors[status];
+                                const isActive = currentStatus === status;
+                                return (
+                                    <motion.button
+                                        key={status}
+                                        whileHover={{ backgroundColor: isActive ? undefined : colors.bg }}
+                                        onClick={() => {
+                                            onChange({ target: { value: status } });
+                                            setIsOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${
+                                            isActive
+                                                ? `${colors.bg} ${colors.text} border-2 ${colors.border} shadow-md`
+                                                : `text-gray-700 hover:${colors.bg}`
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
+                                            {status}
+                                        </div>
+                                    </motion.button>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
 
 // --- SUB-COMPONENT: LIVE ACTION PANEL ---
 const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, userRole }) => {
@@ -60,18 +244,19 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
                 <button
                     onClick={handleToggle}
                     disabled={isToggling}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-black transition-all ${item.editApproved ? "bg-emerald-500 text-white shadow-md" : "bg-slate-200 text-slate-500"
-                        } ${isToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-bold transition-all ${
+                        item.editApproved ? "bg-emerald-500 text-white shadow-md" : "bg-slate-200 text-slate-500"
+                    } ${isToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                     {isToggling ? (
                         <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
                     ) : (
-                        item.editApproved ? <MdLockOpen className="text-sm" /> : <MdLockOutline className="text-sm" />
+                        item.editApproved ? <MdLockOpen className="text-base" /> : <MdLockOutline className="text-base" />
                     )}
                     {isToggling ? "UPDATING..." : (item.editApproved ? "EDIT ENABLED" : "EDIT LOCKED")}
                 </button>
                 {item.userConfirmed && (
-                    <span className="text-[9px] font-black text-blue-600 animate-bounce pr-2">RE-SUBMITTED</span>
+                    <span className="text-[11px] font-bold text-orange-600 animate-bounce pr-2">RE-SUBMITTED</span>
                 )}
             </div>
             <div className="relative">
@@ -81,15 +266,15 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
                     value={msg}
                     onChange={(e) => setMsg(e.target.value)}
                     disabled={isSending}
-                    className="w-full pl-3 pr-9 py-2 text-[11px] border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+                    className="w-full pl-3 pr-9 py-2 text-[13px] border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none disabled:opacity-50"
                 />
                 <button
                     onClick={handleSendMessage}
                     disabled={isSending || !msg.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-orange-500 hover:text-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isSending ? (
-                        <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent"></div>
+                        <div className="animate-spin rounded-full h-3 w-3 border-2 border-orange-500 border-t-transparent"></div>
                     ) : (
                         <FaRegPaperPlane />
                     )}
@@ -102,7 +287,6 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
 // --- SUB-COMPONENT: STATUS SELECT ---
 const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, country, currentUser, userRole, applicant }) => {
     const [loading, setLoading] = useState(false);
-    const options = ["Doc Received", "Analyzing", "Approved", "Rejected"];
 
     const handleChange = async (e) => {
         const val = e.target.value;
@@ -120,7 +304,6 @@ const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, country, 
                 }
             });
 
-            // Log the status change
             await logStatusChange(id, country, oldStatus, val, {
                 uid: currentUser.uid,
                 email: currentUser.email,
@@ -146,13 +329,11 @@ const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, country, 
     };
 
     return (
-        <select
-            value={currentStatus || "Doc Received"}
+        <ModernStatusDropdown 
+            currentStatus={currentStatus} 
             onChange={handleChange}
-            className={`text-[11px] font-bold px-3 py-1 rounded-full border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none ${loading ? 'opacity-50' : ''}`}
-        >
-            {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
+            loading={loading}
+        />
     );
 };
 
@@ -163,6 +344,22 @@ export default function SubAdminPanel() {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [historyVisa, setHistoryVisa] = useState(null);
     const [statusFilter, setStatusFilter] = useState("All");
+    const [countryFilter, setCountryFilter] = useState("All");
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+    const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+    const notifRef = React.useRef(null);
+    const profileRef = React.useRef(null);
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifDropdown(false);
+            if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileDropdown(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     // Date Filters
     const [startDate, setStartDate] = useState('');
@@ -170,25 +367,6 @@ export default function SubAdminPanel() {
 
     const { currentUser, userData, userRole } = useAuth();
     const navigate = useNavigate();
-
-    // Filtered visas based on status and date
-    const filteredVisas = useMemo(() => {
-        return visas.filter(v => {
-            // Status Filter
-            if (statusFilter !== "All" && v.status !== statusFilter) return false;
-
-            // Date Filter
-            if (!startDate && !endDate) return true;
-            const appDate = v.applicationDate?.toDate ? v.applicationDate.toDate() : (v.applicationDate ? new Date(v.applicationDate) : null);
-            if (!appDate) return false;
-
-            const start = startDate ? new Date(startDate) : new Date('1970-01-01');
-            const end = endDate ? new Date(endDate) : new Date();
-            end.setHours(23, 59, 59); // End of day
-
-            return appDate >= start && appDate <= end;
-        });
-    }, [visas, statusFilter, startDate, endDate]);
 
     // Get assigned countries from userData
     const assignedCountries = userData?.assignedCountries || [];
@@ -202,7 +380,6 @@ export default function SubAdminPanel() {
                     return;
                 }
 
-                // Fetch all visas and filter client-side to avoid composite index
                 const q = query(
                     collection(db, "visaApplications"),
                     orderBy("applicationDate", "desc")
@@ -211,15 +388,12 @@ export default function SubAdminPanel() {
                 const snapshot = await getDocs(q);
                 const allVisas = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                // Filter for assigned countries only (case-insensitive —
-                // stored country is a lowercase key e.g. "japan" while
-                // assignedCountries holds display names e.g. "Japan")
                 const assignedLower = assignedCountries.map(c => c.toLowerCase());
-                const filteredVisas = allVisas.filter(visa =>
+                const filtered = allVisas.filter(visa =>
                     assignedLower.includes((visa.country || "").toLowerCase())
                 );
 
-                setVisas(filteredVisas);
+                setVisas(filtered);
             } catch (e) {
                 console.error("Error fetching visas:", e);
             }
@@ -242,376 +416,985 @@ export default function SubAdminPanel() {
         rejected: visas.filter(v => v.status === "Rejected").length,
     }), [visas]);
 
-    // Removed redundant filteredVisas - now handled in integrated memo above
+    // --- CHART DATA ---
+    const parseDate = (d) => {
+        if (!d) return null;
+        if (d.toDate) return d.toDate();
+        return new Date(d);
+    };
 
+    const weeklyOverview = useMemo(() => {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const totals = days.map(d => ({ day: d, applications: 0, approved: 0 }));
+        visas.forEach(v => {
+            const d = parseDate(v.applicationDate);
+            if (!d) return;
+            totals[d.getDay()].applications += 1;
+            if (v.status === "Approved") totals[d.getDay()].approved += 1;
+        });
+        return totals;
+    }, [visas]);
+
+    const donutData = useMemo(() => {
+        const total = stats.total || 0;
+        return {
+            approved: stats.approved,
+            pending: stats.docReceived + stats.analyzing,
+            approvedPct: total ? Math.round((stats.approved / total) * 100) : 0,
+            pendingPct: total ? Math.round(((stats.docReceived + stats.analyzing) / total) * 100) : 0,
+        };
+    }, [stats]);
+
+    // Filtered visas
+    const filteredVisas = useMemo(() => {
+        return visas.filter(v => {
+            if (statusFilter !== "All" && v.status !== statusFilter) return false;
+            if (countryFilter !== "All" && (v.country || "").toLowerCase() !== countryFilter.toLowerCase()) return false;
+            if (!startDate && !endDate) return true;
+            const appDate = v.applicationDate?.toDate
+                ? v.applicationDate.toDate()
+                : (v.applicationDate ? new Date(v.applicationDate) : null);
+            if (!appDate) return false;
+            const start = startDate ? new Date(startDate) : new Date('1970-01-01');
+            const end = endDate ? new Date(endDate) : new Date();
+            end.setHours(23, 59, 59);
+            return appDate >= start && appDate <= end;
+        });
+    }, [visas, statusFilter, countryFilter, startDate, endDate]);
+
+    const navItems = [
+        { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
+        { id: "visas", label: "Visa Applications", icon: <FaPassport /> },
+    ];
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-screen bg-slate-50">
+            <div className="flex items-center justify-center h-screen bg-[#f7f8fa]">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-slate-600 font-bold">Loading your dashboard...</p>
+                    <div className="animate-spin rounded-full h-14 w-14 border-b-4 border-orange-500 mx-auto mb-4"></div>
+                    <p className="text-slate-600 font-bold text-lg">Loading your dashboard...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="flex h-screen bg-slate-50 font-sans">
-            {/* Sidebar */}
-            <aside className="w-64 bg-gradient-to-b from-slate-900 to-slate-800 text-white flex flex-col p-4 shadow-2xl">
-                <div className="p-4 flex items-center gap-3 border-b border-slate-700 mb-6">
-                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-lg">
-                        <FaUserShield className="text-xl" />
-                    </div>
-                    <div>
-                        <span className="font-black text-sm block">SUB-ADMIN</span>
-                        <span className="text-xs text-slate-400">Panel</span>
-                    </div>
-                </div>
+        <div
+            className="flex h-screen bg-[#f7f8fa] overflow-hidden"
+            style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif" }}
+        >
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+            `}</style>
 
-                {/* User Info */}
-                <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-black">
-                            {userData?.displayName?.charAt(0).toUpperCase() || "S"}
+            {/* ===================== SIDEBAR ===================== */}
+            <aside
+                className={`${sidebarCollapsed ? "w-[70px]" : "w-[210px]"} bg-white flex flex-col border-r border-gray-200 transition-all duration-300 shrink-0`}
+                style={{ minHeight: "100vh" }}
+            >
+                {/* Logo area */}
+                <div className={`flex items-center gap-2 px-4 py-5 border-b border-gray-100 ${sidebarCollapsed ? "justify-center" : ""}`}>
+                    <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-400 rounded-lg flex items-center justify-center shrink-0 shadow shadow-orange-200">
+                        <FaUserShield className="text-white text-base" />
+                    </div>
+                    {!sidebarCollapsed && (
+                        <div>
+                            <p className="text-base font-bold text-slate-800 leading-none">Sub-Admin</p>
+                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Travel Agency</p>
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-white truncate">{userData?.displayName}</p>
-                            <p className="text-xs text-slate-400 truncate">{currentUser?.email}</p>
-                        </div>
-                    </div>
-                    <div className="border-t border-slate-700 pt-3">
-                        <p className="text-xs font-black text-slate-400 uppercase mb-2">Assigned Countries</p>
-                        <div className="flex flex-wrap gap-1">
-                            {assignedCountries.slice(0, 3).map(country => (
-                                <span key={country} className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full font-bold">
-                                    {country}
-                                </span>
-                            ))}
-                            {assignedCountries.length > 3 && (
-                                <span className="text-[10px] text-slate-400 font-bold">+{assignedCountries.length - 3}</span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <nav className="flex-1 space-y-2">
-                    {[
-                        { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
-                        { id: "visas", label: "Visa Applications", icon: <FaPassport /> },
-                    ].map(item => (
-                        <button
-                            key={item.id}
-                            onClick={() => setActiveTab(item.id)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === item.id ? "bg-blue-600 text-white shadow-lg" : "text-slate-400 hover:bg-slate-700 hover:text-white"
-                                }`}
-                        >
-                            {item.icon} <span className="text-sm font-bold">{item.label}</span>
-                        </button>
-                    ))}
-                </nav>
-
-                <button
-                    onClick={() => signOut().then(() => navigate("/"))}
-                    className="flex items-center gap-3 px-4 py-3 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all mt-4"
-                >
-                    <MdLogout /> <span className="text-sm font-bold">Logout</span>
-                </button>
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1 overflow-y-auto p-8">
-                <header className="mb-10">
-                    <h2 className="text-3xl font-black text-slate-800 capitalize tracking-tighter">
-                        {activeTab === "overview" ? "Dashboard Overview" : "Visa Applications"}
-                    </h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                        Managing applications for {assignedCountries.length} {assignedCountries.length === 1 ? "country" : "countries"}
-                    </p>
-                </header>
-
-                {/* Date Filters */}
-                <div className="mb-6 flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">Start Date</label>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">End Date</label>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                    </div>
-                    {(startDate || endDate) && (
-                        <button
-                            onClick={() => { setStartDate(''); setEndDate(''); }}
-                            className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
-                        >
-                            Clear Filters
-                        </button>
                     )}
                 </div>
 
-                {/* Dashboard Overview */}
-                {activeTab === "overview" && (
-                    <div className="space-y-8">
-                        {/* Date Filters */}
-                        <div className="mb-6 flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1">Start Date</label>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
+                {/* User info card — visible when expanded */}
+                {!sidebarCollapsed && (
+                    <div className="mx-3 mt-4 bg-orange-50 rounded-xl p-3 border border-orange-100">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 bg-gradient-to-br from-orange-500 to-orange-400 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
+                                {userData?.displayName?.charAt(0).toUpperCase() || "S"}
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1">End Date</label>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-slate-800 truncate">{userData?.displayName || "Sub Admin"}</p>
+                                <p className="text-[11px] text-slate-400 truncate">{currentUser?.email}</p>
                             </div>
-                            {(startDate || endDate) && (
-                                <button
-                                    onClick={() => { setStartDate(''); setEndDate(''); }}
-                                    className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
-                                >
-                                    Clear Filters
-                                </button>
-                            )}
                         </div>
-
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                            <KPIBox label="Total Applications" value={stats.total} color="text-slate-800" />
-                            <KPIBox label="Doc Received" value={stats.docReceived} color="text-blue-600" />
-                            <KPIBox label="Analyzing" value={stats.analyzing} color="text-amber-600" />
-                            <KPIBox label="Approved" value={stats.approved} color="text-emerald-600" />
-                            <KPIBox label="Rejected" value={stats.rejected} color="text-red-600" />
-                        </div>
-
-                        {/* Assigned Countries */}
-                        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                            <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                                <MdPublic className="text-blue-600" />
-                                Your Assigned Countries
-                            </h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {assignedCountries.map(country => (
-                                    <div key={country} className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-xl border border-blue-100">
-                                        <p className="font-bold text-slate-800">{country}</p>
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            {visas.filter(v => (v.country || "").toLowerCase() === country.toLowerCase()).length} applications
-                                        </p>
-                                    </div>
+                        <div className="border-t border-orange-100 pt-2">
+                            <p className="text-[11px] font-bold text-orange-400 uppercase mb-1.5">Assigned Countries</p>
+                            <div className="flex flex-wrap gap-1">
+                                {assignedCountries.slice(0, 3).map(country => (
+                                    <span key={country} className="text-[11px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold">
+                                        {country}
+                                    </span>
                                 ))}
-                            </div>
-                        </div>
-
-                        {/* Recent Applications */}
-                        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                            <h3 className="text-lg font-black text-slate-800 mb-4">Recent Applications</h3>
-                            {visas.slice(0, 5).length === 0 ? (
-                                <div className="text-center py-12">
-                                    <FaPassport className="text-slate-300 text-4xl mx-auto mb-3" />
-                                    <p className="text-slate-500 font-bold">No applications yet</p>
-                                    <p className="text-sm text-slate-400">Applications will appear here once submitted</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {visas.slice(0, 5).map(visa => (
-                                        <div key={visa.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <FaPassport className="text-blue-600" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-slate-800">{visa.applicantName}</p>
-                                                    <p className="text-xs text-slate-500">{visa.country} • {visa.visaType}</p>
-                                                </div>
-                                            </div>
-                                            <span className={`text-xs font-black px-3 py-1 rounded-full ${visa.status === "Approved" ? "bg-emerald-100 text-emerald-700" :
-                                                visa.status === "Rejected" ? "bg-red-100 text-red-700" :
-                                                    visa.status === "Analyzing" ? "bg-amber-100 text-amber-700" :
-                                                        "bg-blue-100 text-blue-700"
-                                                }`}>
-                                                {visa.status}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Allowed Edited Applications */}
-                        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                                    <MdLockOpen className="text-emerald-600" />
-                                    Allowed Edited Applications
-                                </h3>
-                                {visas.filter(v => v.editApproved && !v.userConfirmed).length > 0 && (
-                                    <span className="bg-emerald-100 text-emerald-700 text-xs font-black px-3 py-1 rounded-full">
-                                        {visas.filter(v => v.editApproved && !v.userConfirmed).length} Pending
-                                    </span>
+                                {assignedCountries.length > 3 && (
+                                    <span className="text-[11px] text-slate-400 font-bold">+{assignedCountries.length - 3}</span>
                                 )}
                             </div>
-                            {visas.filter(v => v.editApproved && !v.userConfirmed).length === 0 ? (
-                                <div className="text-center py-12">
-                                    <MdLockOpen className="text-slate-300 text-4xl mx-auto mb-3" />
-                                    <p className="text-slate-500 font-bold">No edit-allowed applications</p>
-                                    <p className="text-sm text-slate-400">Applications with edit permission will appear here</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {visas.filter(v => v.editApproved && !v.userConfirmed).map(visa => (
-                                        <div key={visa.id} className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                                            <div className="flex items-center gap-4 flex-1">
-                                                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                                                    <FaPassport className="text-emerald-600" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-slate-800">{visa.applicantName}</p>
-                                                    <p className="text-xs text-slate-500">{visa.country} • {visa.visaType}</p>
-                                                    {visa.adminMessage && (
-                                                        <p className="text-xs text-emerald-700 mt-1 font-bold">
-                                                            📝 {visa.adminMessage}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-black text-emerald-600 bg-white px-3 py-1 rounded-full">
-                                                AWAITING EDIT
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Recently Edited Applications (User Completed) */}
-                        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                                    <MdCheckCircle className="text-blue-600" />
-                                    Recently Edited Applications
-                                </h3>
-                                {visas.filter(v => v.userConfirmed).length > 0 && (
-                                    <span className="bg-blue-100 text-blue-700 text-xs font-black px-3 py-1 rounded-full">
-                                        {visas.filter(v => v.userConfirmed).length} New
-                                    </span>
-                                )}
-                            </div>
-                            {visas.filter(v => v.userConfirmed).length === 0 ? (
-                                <div className="text-center py-12">
-                                    <MdCheckCircle className="text-slate-300 text-4xl mx-auto mb-3" />
-                                    <p className="text-slate-500 font-bold">No recently edited applications</p>
-                                    <p className="text-sm text-slate-400">User-completed edits will appear here</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {visas.filter(v => v.userConfirmed).slice(0, 10).map(visa => (
-                                        <div key={visa.id} className="flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-200">
-                                            <div className="flex items-center gap-4 flex-1">
-                                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <FaPassport className="text-blue-600" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-slate-800">{visa.applicantName}</p>
-                                                    <p className="text-xs text-slate-500">{visa.country} • {visa.visaType}</p>
-                                                    {visa.adminMessage && (
-                                                        <p className="text-xs text-blue-700 mt-1">
-                                                            📝 Original Request: {visa.adminMessage}
-                                                        </p>
-                                                    )}
-                                                    {visa.userConfirmedAt && (
-                                                        <p className="text-xs text-slate-400 mt-1">
-                                                            ✓ Edited on {new Date(visa.userConfirmedAt).toLocaleDateString()} at {new Date(visa.userConfirmedAt).toLocaleTimeString()}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() => setHistoryVisa(visa)}
-                                                    className="text-xs font-black text-blue-600 bg-white px-3 py-1 rounded-full hover:bg-blue-600 hover:text-white transition-all border border-blue-200"
-                                                >
-                                                    📋 View History
-                                                </button>
-                                                <span className="text-xs font-black text-blue-600 bg-white px-3 py-1 rounded-full animate-pulse">
-                                                    RE-SUBMITTED
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </div>
                     </div>
                 )}
 
-                {/* Visas Tab */}
-                {activeTab === "visas" && (
-                    <div className="space-y-6">
-                        {/* Status Filter Tabs */}
-                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-2 inline-flex gap-2">
-                            {["All", "Doc Received", "Analyzing", "Approved", "Rejected"].map(status => (
-                                <button
-                                    key={status}
-                                    onClick={() => setStatusFilter(status)}
-                                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${statusFilter === status
-                                        ? "bg-blue-600 text-white shadow-md"
-                                        : "hover:bg-slate-50 text-slate-600"
-                                        }`}
+                {/* Nav */}
+                <div className="flex-1 px-3 py-4 overflow-y-auto">
+                    {!sidebarCollapsed && (
+                        <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-2">Main</p>
+                    )}
+                    <nav className="space-y-0.5">
+                        {navItems.map(item => {
+                            const isActive = activeTab === item.id;
+                            return (
+                                <motion.button
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id)}
+                                    title={sidebarCollapsed ? item.label : ""}
+                                    whileHover={{ x: sidebarCollapsed ? 0 : 3 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base transition-colors group
+                                        ${isActive
+                                            ? "bg-orange-50 text-orange-600 font-bold"
+                                            : "text-gray-500 hover:bg-gray-50 hover:text-gray-700 font-medium"
+                                        }
+                                        ${sidebarCollapsed ? "justify-center" : ""}
+                                    `}
                                 >
-                                    {status}
-                                </button>
-                            ))}
+                                    {isActive && (
+                                        <motion.span
+                                            layoutId="subadmin-nav-indicator"
+                                            className="absolute left-0 top-1 bottom-1 w-1 rounded-full bg-orange-500"
+                                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                        />
+                                    )}
+                                    <span className={`text-lg shrink-0 ${isActive ? "text-orange-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                                        {item.icon}
+                                    </span>
+                                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                                </motion.button>
+                            );
+                        })}
+                    </nav>
+
+                    {/* Account section */}
+                    {!sidebarCollapsed && (
+                        <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mt-6 mb-3 px-2">Account</p>
+                    )}
+                    {sidebarCollapsed && <div className="my-4 border-t border-gray-100" />}
+                    <div className="space-y-0.5">
+                        <button
+                            onClick={() => signOut().then(() => navigate("/"))}
+                            title={sidebarCollapsed ? "Log out" : ""}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base text-gray-500 hover:bg-red-50 hover:text-red-500 font-medium transition-all
+                                ${sidebarCollapsed ? "justify-center" : ""}
+                            `}
+                        >
+                            <MdLogout className="text-lg shrink-0 text-gray-400" />
+                            {!sidebarCollapsed && <span>Log out</span>}
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            {/* ===================== MAIN AREA ===================== */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+
+                {/* ---- TOP BAR ---- */}
+                <header className="h-[56px] bg-white border-b border-gray-200 flex items-center px-6 shrink-0">
+                    <button
+                        onClick={() => setSidebarCollapsed(p => !p)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors mr-4"
+                    >
+                        <MdMenu className="text-xl" />
+                    </button>
+
+                    <div className="flex-1" />
+
+                    <div className="flex items-center gap-3">
+                        {/* Bell */}
+                        <div className="relative" ref={notifRef}>
+                            <motion.button
+                                whileHover={{ scale: 1.08 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => { setShowNotifDropdown(p => !p); setShowProfileDropdown(false); }}
+                                className="relative w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                                <MdNotificationsNone className="text-2xl" />
+                                {visas.filter(v => v.userConfirmed).length > 0 && (
+                                    <motion.span
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        transition={{ type: "spring", stiffness: 500 }}
+                                        className="absolute -top-1 -right-1 bg-orange-500 text-white text-[11px] font-bold w-4 h-4 rounded-full flex items-center justify-center"
+                                    >
+                                        {visas.filter(v => v.userConfirmed).length > 9 ? "9+" : visas.filter(v => v.userConfirmed).length}
+                                    </motion.span>
+                                )}
+                            </motion.button>
+
+                            <AnimatePresence>
+                                {showNotifDropdown && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="absolute right-0 top-11 w-80 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden"
+                                    >
+                                        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                                            <h4 className="text-base font-bold text-gray-800">Notifications</h4>
+                                            <span className="text-[12px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
+                                                {visas.filter(v => v.userConfirmed).length} New
+                                            </span>
+                                        </div>
+                                        <div className="max-h-80 overflow-y-auto">
+                                            {visas.filter(v => v.userConfirmed).length === 0 ? (
+                                                <div className="p-6 text-center">
+                                                    <MdNotificationsNone className="text-gray-200 text-4xl mx-auto mb-2" />
+                                                    <p className="text-sm text-gray-400 font-bold">No new notifications</p>
+                                                </div>
+                                            ) : (
+                                                visas.filter(v => v.userConfirmed).slice(0, 8).map(v => (
+                                                    <button
+                                                        key={v.id}
+                                                        onClick={() => {
+                                                            setSelectedDoc(v);
+                                                            setShowNotifDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 hover:bg-orange-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3"
+                                                    >
+                                                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                                                            <FaPassport className="text-orange-500 text-sm" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-bold text-gray-800 truncate">{v.applicantName || "Applicant"}</p>
+                                                            <p className="text-[12px] text-gray-400 truncate">{v.country} • Re-submitted for review</p>
+                                                        </div>
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                        {visas.filter(v => v.userConfirmed).length > 0 && (
+                                            <button
+                                                onClick={() => { setActiveTab("visas"); setShowNotifDropdown(false); }}
+                                                className="w-full text-center text-sm font-bold text-orange-500 py-2.5 border-t border-gray-100 hover:bg-orange-50 transition-colors"
+                                            >
+                                                View All Applications
+                                            </button>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
 
-                        {/* Visas Table */}
-                        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                            <Table head={["Applicant", "Country/Type", "Status", "Live Control", "Docs"]}>
+                        {/* Avatar + Profile */}
+                        <div className="relative" ref={profileRef}>
+                            <motion.button
+                                whileHover={{ scale: 1.08 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => { setShowProfileDropdown(p => !p); setShowNotifDropdown(false); }}
+                                className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-base shadow shadow-orange-200 cursor-pointer"
+                            >
+                                {userData?.displayName?.charAt(0).toUpperCase() || (currentUser?.email || "S")[0].toUpperCase()}
+                            </motion.button>
+
+                            <AnimatePresence>
+                                {showProfileDropdown && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="absolute right-0 top-11 w-64 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden"
+                                    >
+                                        <div className="p-4 border-b border-gray-100 bg-gradient-to-br from-orange-50 to-amber-50 flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-base shrink-0">
+                                                {userData?.displayName?.charAt(0).toUpperCase() || (currentUser?.email || "S")[0].toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-base font-bold text-gray-800 truncate">{userData?.displayName || "Sub Admin"}</p>
+                                                <p className="text-[12px] text-gray-500 truncate">{currentUser?.email}</p>
+                                            </div>
+                                        </div>
+                                        <div className="p-2">
+                                            <button
+                                                onClick={() => { setActiveTab("overview"); setShowProfileDropdown(false); }}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-base font-medium text-gray-600 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                                            >
+                                                <MdDashboard className="text-lg text-gray-400" /> Dashboard
+                                            </button>
+                                            <button
+                                                onClick={() => { setActiveTab("visas"); setShowProfileDropdown(false); }}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-base font-medium text-gray-600 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                                            >
+                                                <FaPassport className="text-base text-gray-400" /> Visa Applications
+                                            </button>
+                                            <div className="my-1 border-t border-gray-100" />
+                                            <button
+                                                onClick={() => signOut().then(() => navigate("/"))}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-base font-bold text-red-500 hover:bg-red-50 transition-colors"
+                                            >
+                                                <MdLogout className="text-lg" /> Log out
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+                </header>
+
+                {/* ---- SCROLLABLE CONTENT ---- */}
+                <main className="flex-1 overflow-y-auto p-8 bg-[#f7f8fa]">
+
+                    {/* Page heading */}
+                    <div className="mb-7">
+                        <h1 className="text-4xl font-bold text-slate-800 tracking-tight">
+                            {activeTab === "overview" ? "Dashboard" : "Visa Applications"}
+                        </h1>
+                        <p className="text-base text-gray-500 font-medium mt-1">
+                            Managing applications for{" "}
+                            <span className="text-orange-500 font-bold">
+                                {assignedCountries.length} {assignedCountries.length === 1 ? "country" : "countries"}
+                            </span>
+                        </p>
+                    </div>
+
+                    {/* =================== OVERVIEW TAB =================== */}
+                    {activeTab === "overview" && (
+                        <div className="space-y-6">
+
+                            {/* === DATE FILTERS === */}
+                            {/* <div className="flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-500 mb-1">Start Date</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-500 mb-1">End Date</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none"
+                                    />
+                                </div>
+                                {(startDate || endDate) && (
+                                    <button
+                                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                                        className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-base font-bold hover:bg-slate-200 transition-colors"
+                                    >
+                                        Clear Filters
+                                    </button>
+                                )}
+                                <span className="ml-auto text-sm font-bold text-slate-400 self-center">
+                                    Showing: {startDate || 'Start'} → {endDate || 'Now'}
+                                </span>
+                            </div> */}
+
+                            {/* === TOP KPI ROW (5 pastel cards) === */}
+                            <motion.div
+                                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"
+                                initial="hidden"
+                                animate="show"
+                                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07 } } }}
+                            >
+                                {/* Total */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(99,102,241,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("All"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#EEF0FD] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white text-xl shadow-sm shadow-orange-300">
+                                            <FaPassport />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Total</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.total}</h3>
+                                    <p className="text-[13px] font-bold text-orange-500">All Applications</p>
+                                </motion.div>
+
+                                {/* Doc Received */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(14,165,233,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("Doc Received"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#E0F3FE] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white text-xl shadow-sm shadow-sky-300">
+                                            <MdOutlineContentCopy />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Doc Received</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.docReceived}</h3>
+                                    <p className="text-[13px] font-bold text-sky-500">Awaiting Review</p>
+                                </motion.div>
+
+                                {/* Analyzing */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(251,191,36,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("Analyzing"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#FFF8E1] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-400 flex items-center justify-center text-white text-xl shadow-sm shadow-amber-200">
+                                            <MdSwapHoriz />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Analyzing</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.analyzing}</h3>
+                                    <p className="text-[13px] font-bold text-amber-500">In Progress</p>
+                                </motion.div>
+
+                                {/* Approved */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(16,185,129,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("Approved"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#E6F9F0] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white text-xl shadow-sm shadow-emerald-300">
+                                            <MdCheckCircle />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Approved</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.approved}</h3>
+                                    <p className="text-[13px] font-bold text-emerald-500">+22% this month</p>
+                                </motion.div>
+
+                                {/* Rejected */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(248,113,113,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("Rejected"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#FEE8E8] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-red-400 flex items-center justify-center text-white text-xl shadow-sm shadow-red-200">
+                                            <MdReceipt />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Rejected</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.rejected}</h3>
+                                    <p className="text-[13px] font-bold text-red-400">Applications</p>
+                                </motion.div>
+                            </motion.div>
+
+                            {/* === SECONDARY STATS ROW (3 white cards) === */}
+                            <motion.div
+                                className="grid grid-cols-1 md:grid-cols-3 gap-5"
+                                initial="hidden"
+                                animate="show"
+                                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}
+                            >
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-default"
+                                >
+                                    <div className="flex items-start justify-between mb-1">
+                                        <div>
+                                            <h3 className="text-4xl font-bold text-gray-800">{stats.docReceived}</h3>
+                                            <p className="text-base font-semibold text-gray-400 mt-1">Docs Awaiting Review</p>
+                                        </div>
+                                        <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+                                            <MdOutlineContentCopy className="text-orange-500 text-2xl" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
+                                        <span className="text-[13px] font-bold text-emerald-600">+35% vs Last Month</span>
+                                        <button onClick={() => { setStatusFilter("Doc Received"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
+                                    </div>
+                                </motion.div>
+
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-default"
+                                >
+                                    <div className="flex items-start justify-between mb-1">
+                                        <div>
+                                            <h3 className="text-4xl font-bold text-gray-800">{stats.analyzing}</h3>
+                                            <p className="text-base font-semibold text-gray-400 mt-1">Currently Analyzing</p>
+                                        </div>
+                                        <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+                                            <MdOutlineCreditCard className="text-orange-500 text-2xl" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
+                                        <span className="text-[13px] font-bold text-amber-500">In Progress</span>
+                                        <button onClick={() => { setStatusFilter("Analyzing"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
+                                    </div>
+                                </motion.div>
+
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-default"
+                                >
+                                    <div className="flex items-start justify-between mb-1">
+                                        <div>
+                                            <h3 className="text-4xl font-bold text-gray-800">{stats.rejected}</h3>
+                                            <p className="text-base font-semibold text-gray-400 mt-1">Rejected Applications</p>
+                                        </div>
+                                        <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                                            <MdReceipt className="text-amber-500 text-2xl" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
+                                        <span className="text-[13px] font-bold text-red-500">-20% vs Last Month</span>
+                                        <button onClick={() => { setStatusFilter("Rejected"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+
+                            {/* === CHARTS ROW === */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                                {/* Bar Chart — Applications this week */}
+                                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                    <div className="flex items-center justify-between mb-5">
+                                        <h3 className="text-lg font-bold text-gray-800">Applications This Week</h3>
+                                        <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">By Day</span>
+                                    </div>
+                                    <ResponsiveContainer width="100%" height={260}>
+                                        <BarChart
+                                            data={weeklyOverview}
+                                            margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                                            barGap={2}
+                                            barCategoryGap="25%"
+                                            barSize={22}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis
+                                                dataKey="day"
+                                                tick={{ fontSize: 11, fill: "#9ca3af" }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                            />
+                                            <YAxis
+                                                tick={{ fontSize: 11, fill: "#9ca3af" }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                                allowDecimals={false}
+                                            />
+                                            <Tooltip
+                                                contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}
+                                                cursor={{ fill: "rgba(0,0,0,0.03)" }}
+                                            />
+                                            <Bar dataKey="applications" name="Applications" fill="#A5B4FC" radius={[6, 6, 0, 0]} />
+                                            <Bar dataKey="approved" name="Approved" fill="#6366F1" radius={[6, 6, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                    <div className="flex items-center justify-center gap-6 mt-3 text-sm font-bold text-gray-500">
+                                        <span className="flex items-center gap-2">
+                                            <span className="w-3 h-3 rounded-sm bg-[#A5B4FC] inline-block"></span>
+                                            Applications
+                                        </span>
+                                        <span className="flex items-center gap-2">
+                                            <span className="w-3 h-3 rounded-sm bg-[#6366F1] inline-block"></span>
+                                            Approved
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Radial ring summary */}
+                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h3 className="text-lg font-bold text-gray-800">Status Overview</h3>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-400 mb-5">Your applications breakdown</p>
+
+                                    <div className="flex items-center gap-4 mb-2">
+                                        <div className="relative w-[140px] h-[140px] shrink-0">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <RadialBarChart
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius="55%"
+                                                    outerRadius="100%"
+                                                    barSize={10}
+                                                    data={[
+                                                        { name: "Approved", value: donutData.approvedPct, fill: "#6366F1" },
+                                                        { name: "Pending", value: donutData.pendingPct, fill: "#FBBF24" },
+                                                    ]}
+                                                    startAngle={90}
+                                                    endAngle={-270}
+                                                >
+                                                    <RadialBar
+                                                        background={{ fill: "#EEF1F4" }}
+                                                        dataKey="value"
+                                                        cornerRadius={20}
+                                                        clockWise
+                                                    />
+                                                </RadialBarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                        <div className="flex-1 space-y-4">
+                                            <div>
+                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.approved}</p>
+                                                <p className="text-[13px] font-bold text-orange-500 mt-0.5">Approved</p>
+                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full">
+                                                    ▲ {donutData.approvedPct}%
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.pending}</p>
+                                                <p className="text-[13px] font-bold text-amber-500 mt-0.5">Pending</p>
+                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                                                    ▲ {donutData.pendingPct}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3 mt-auto pt-6 border-t border-gray-100 text-center">
+                                        <div className="border-r border-gray-100">
+                                            <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
+                                            <p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Total</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-3xl font-bold text-gray-800">{stats.rejected}</p>
+                                            <p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Rejected</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* === ASSIGNED COUNTRIES + RECENT APPS (side by side) === */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                                {/* Assigned Countries */}
+                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                    <div className="flex items-center justify-between mb-5">
+                                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                            <MdPublic className="text-orange-500" />
+                                            Your Assigned Countries
+                                        </h3>
+                                        <span className="text-sm font-bold text-orange-500 bg-orange-50 px-3 py-1 rounded-lg">
+                                            {assignedCountries.length} Total
+                                        </span>
+                                    </div>
+                                    {assignedCountries.length === 0 ? (
+                                        <div className="text-center py-10">
+                                            <MdPublic className="text-gray-200 text-4xl mx-auto mb-2" />
+                                            <p className="text-gray-400 font-bold text-base">No countries assigned yet</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {assignedCountries.map(country => {
+                                                const count = visas.filter(v => (v.country || "").toLowerCase() === country.toLowerCase()).length;
+                                                return (
+                                                    <motion.button
+                                                        key={country}
+                                                        onClick={() => { setCountryFilter(country); setStatusFilter("All"); setActiveTab("visas"); }}
+                                                        whileHover={{ y: -2 }}
+                                                        whileTap={{ scale: 0.97 }}
+                                                        className="text-left bg-gradient-to-br from-orange-50 to-amber-50 p-4 rounded-xl border border-orange-100 hover:border-orange-300 transition-colors"
+                                                    >
+                                                        <p className="font-bold text-slate-800 text-base">{country}</p>
+                                                        <p className="text-sm text-orange-500 mt-1 font-semibold">{count} application{count !== 1 ? "s" : ""}</p>
+                                                    </motion.button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Recent Applications */}
+                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                    <div className="flex items-center justify-between mb-5">
+                                        <h3 className="text-lg font-bold text-gray-800">Recent Applications</h3>
+                                        <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">Latest 5</span>
+                                    </div>
+                                    {visas.slice(0, 5).length === 0 ? (
+                                        <div className="text-center py-10">
+                                            <FaPassport className="text-gray-200 text-4xl mx-auto mb-2" />
+                                            <p className="text-gray-400 font-bold text-base">No applications yet</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {visas.slice(0, 5).map(visa => (
+                                                <motion.button
+                                                    key={visa.id}
+                                                    onClick={() => setSelectedDoc(visa)}
+                                                    whileHover={{ x: 2 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-orange-50/50 transition-colors text-left"
+                                                >
+                                                    <div className="w-9 h-9 bg-orange-100 rounded-full flex items-center justify-center shrink-0">
+                                                        <FaPassport className="text-orange-500 text-base" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-bold text-gray-800 text-base truncate">{visa.applicantName}</p>
+                                                        <p className="text-[12px] text-gray-400 truncate">{visa.country} • {visa.visaType}</p>
+                                                    </div>
+                                                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                                                        visa.status === "Approved" ? "bg-emerald-50 text-emerald-600" :
+                                                        visa.status === "Rejected" ? "bg-red-50 text-red-500" :
+                                                        visa.status === "Analyzing" ? "bg-amber-50 text-amber-600" :
+                                                        "bg-sky-50 text-sky-600"
+                                                    }`}>
+                                                        {visa.status || "Doc Received"}
+                                                    </span>
+                                                </motion.button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* === ALLOWED EDITED APPLICATIONS === */}
+                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <div className="flex items-center justify-between mb-5">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <MdLockOpen className="text-emerald-500" />
+                                        Allowed Edited Applications
+                                    </h3>
+                                    {visas.filter(v => v.editApproved && !v.userConfirmed).length > 0 && (
+                                        <span className="bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-1 rounded-full">
+                                            {visas.filter(v => v.editApproved && !v.userConfirmed).length} Pending
+                                        </span>
+                                    )}
+                                </div>
+                                {visas.filter(v => v.editApproved && !v.userConfirmed).length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <MdLockOpen className="text-gray-200 text-5xl mx-auto mb-3" />
+                                        <p className="text-gray-500 font-bold">No edit-allowed applications</p>
+                                        <p className="text-base text-gray-400 mt-1">Applications with edit permission will appear here</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {visas.filter(v => v.editApproved && !v.userConfirmed).map(visa => (
+                                            <div key={visa.id} className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                                                <div className="flex items-center gap-4 flex-1">
+                                                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                                                        <FaPassport className="text-emerald-600" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-gray-800">{visa.applicantName}</p>
+                                                        <p className="text-sm text-gray-500">{visa.country} • {visa.visaType}</p>
+                                                        {visa.adminMessage && (
+                                                            <p className="text-sm text-emerald-700 mt-1 font-bold">📝 {visa.adminMessage}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <span className="text-sm font-bold text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100">
+                                                    AWAITING EDIT
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* === RECENTLY EDITED APPLICATIONS === */}
+                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <div className="flex items-center justify-between mb-5">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <MdCheckCircle className="text-orange-500" />
+                                        Recently Edited Applications
+                                    </h3>
+                                    {visas.filter(v => v.userConfirmed).length > 0 && (
+                                        <span className="bg-orange-100 text-orange-700 text-sm font-bold px-3 py-1 rounded-full">
+                                            {visas.filter(v => v.userConfirmed).length} New
+                                        </span>
+                                    )}
+                                </div>
+                                {visas.filter(v => v.userConfirmed).length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <MdCheckCircle className="text-gray-200 text-5xl mx-auto mb-3" />
+                                        <p className="text-gray-500 font-bold">No recently edited applications</p>
+                                        <p className="text-base text-gray-400 mt-1">User-completed edits will appear here</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {visas.filter(v => v.userConfirmed).slice(0, 10).map(visa => (
+                                            <div key={visa.id} className="flex items-center justify-between p-4 bg-orange-50 rounded-xl border border-orange-100">
+                                                <div className="flex items-center gap-4 flex-1">
+                                                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                                                        <FaPassport className="text-orange-500" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-gray-800">{visa.applicantName}</p>
+                                                        <p className="text-sm text-gray-500">{visa.country} • {visa.visaType}</p>
+                                                        {visa.adminMessage && (
+                                                            <p className="text-sm text-orange-700 mt-1">📝 Original Request: {visa.adminMessage}</p>
+                                                        )}
+                                                        {visa.userConfirmedAt && (
+                                                            <p className="text-sm text-gray-400 mt-1">
+                                                                ✓ Edited on {new Date(visa.userConfirmedAt).toLocaleDateString()} at {new Date(visa.userConfirmedAt).toLocaleTimeString()}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => setHistoryVisa(visa)}
+                                                        className="text-sm font-bold text-orange-600 bg-white px-3 py-1.5 rounded-full hover:bg-orange-600 hover:text-white transition-all border border-orange-100"
+                                                    >
+                                                        📋 View History
+                                                    </button>
+                                                    <span className="text-sm font-bold text-orange-600 bg-white px-3 py-1.5 rounded-full animate-pulse border border-orange-100">
+                                                        RE-SUBMITTED
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* =================== VISAS TAB =================== */}
+                    {activeTab === "visas" && (
+                        <div className="space-y-5">
+
+                            {/* Date Filters */}
+                            <div className="flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-500 mb-1">Start Date</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-500 mb-1">End Date</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none"
+                                    />
+                                </div>
+                                {(startDate || endDate) && (
+                                    <button
+                                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                                        className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-base font-bold hover:bg-slate-200 transition-colors"
+                                    >
+                                        Clear Filters
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Status Filter Pills + Country Filter */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-2 inline-flex gap-1.5 flex-wrap">
+                                    {["All", "Doc Received", "Analyzing", "Approved", "Rejected"].map(status => (
+                                        <button
+                                            key={status}
+                                            onClick={() => setStatusFilter(status)}
+                                            className={`px-4 py-2 text-sm font-bold rounded-xl transition-all ${
+                                                statusFilter === status
+                                                    ? "bg-orange-500 text-white shadow-md shadow-orange-200"
+                                                    : "hover:bg-gray-50 text-gray-500"
+                                            }`}
+                                        >
+                                            {status}
+                                            {status !== "All" && (
+                                                <span className={`ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                                                    statusFilter === status ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"
+                                                }`}>
+                                                    {status === "Doc Received" ? stats.docReceived :
+                                                     status === "Analyzing" ? stats.analyzing :
+                                                     status === "Approved" ? stats.approved :
+                                                     stats.rejected}
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <ModernCountryDropdown 
+                                    value={countryFilter}
+                                    onChange={(e) => setCountryFilter(e.target.value)}
+                                    options={assignedCountries}
+                                    assignedCountries={assignedCountries}
+                                />
+
+                                {countryFilter !== "All" && (
+                                    <motion.button
+                                        initial={{ scale: 0.9, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        exit={{ scale: 0.9, opacity: 0 }}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => setCountryFilter("All")}
+                                        className="flex items-center gap-1.5 bg-orange-50 text-orange-600 text-sm font-bold px-3 py-2.5 rounded-2xl hover:bg-orange-100 transition-colors border border-orange-200"
+                                    >
+                                        {countryFilter} <MdClear className="text-base" />
+                                    </motion.button>
+                                )}
+                            </div>
+
+                            {/* Visas List */}
+                            <div className="space-y-4">
                                 {filteredVisas.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="5" className="p-12 text-center">
-                                            <FaPassport className="text-slate-300 text-5xl mx-auto mb-4" />
-                                            <p className="text-slate-500 font-bold text-lg">
-                                                {statusFilter === "All" ? "No visa applications" : `No ${statusFilter} applications`}
-                                            </p>
-                                            <p className="text-sm text-slate-400 mt-2">
-                                                {statusFilter === "All"
-                                                    ? "Applications for your assigned countries will appear here"
-                                                    : `Try selecting a different status filter`
-                                                }
-                                            </p>
-                                        </td>
-                                    </tr>
+                                    <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-14 text-center">
+                                        <div className="w-16 h-16 rounded-3xl bg-orange-50 flex items-center justify-center mx-auto mb-4">
+                                            <FaPassport className="text-orange-300 text-4xl" />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-slate-900 mb-2">{statusFilter === "All" ? "No visa applications" : `No "${statusFilter}" applications`}</h3>
+                                        <p className="text-sm text-slate-500">
+                                            {statusFilter === "All"
+                                                ? "Applications for your assigned countries will appear here."
+                                                : "Try selecting a different status filter or country."}
+                                        </p>
+                                    </div>
                                 ) : (
                                     filteredVisas.map(v => (
-                                        <tr key={v.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                                            <td className="p-5">
-                                                <p className="font-bold text-slate-800">{v.applicantName}</p>
-                                                <p className="text-[10px] text-slate-400 font-bold">{v.email}</p>
-                                            </td>
-                                            <td className="p-5">
-                                                <p className="text-xs font-bold text-slate-600">{v.country}</p>
-                                                <p className="text-[9px] font-black text-blue-500 uppercase">{v.visaType}</p>
-                                            </td>
-                                            <td className="p-5">
+                                        <motion.div
+                                            key={v.id}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ duration: 0.22 }}
+                                            className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5 md:p-6 grid gap-4 md:grid-cols-[2.4fr_1fr_1fr_0.9fr] items-center"
+                                        >
+                                            <div className="flex items-start gap-4">
+                                                <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-orange-600 text-2xl font-black shadow-sm">
+                                                    {v.applicantName?.charAt(0).toUpperCase() || "A"}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-lg font-bold text-slate-900 truncate">{v.applicantName}</p>
+                                                    <p className="text-sm text-slate-500 truncate">{v.email}</p>
+                                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                        <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 text-orange-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] border border-orange-100">
+                                                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                                            {v.country}
+                                                        </span>
+                                                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] border border-slate-200">
+                                                            <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                                            {v.visaType}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Status</div>
                                                 <StatusDropdown
                                                     id={v.id}
                                                     currentStatus={v.status}
@@ -622,8 +1405,10 @@ export default function SubAdminPanel() {
                                                     userRole={userRole}
                                                     applicant={v}
                                                 />
-                                            </td>
-                                            <td className="p-5">
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Edit control</div>
                                                 <LiveActionPanel
                                                     item={v}
                                                     collectionName="visaApplications"
@@ -631,27 +1416,35 @@ export default function SubAdminPanel() {
                                                     currentUser={currentUser}
                                                     userRole={userRole}
                                                 />
-                                            </td>
-                                            <td className="p-5">
+                                            </div>
+
+                                            <div className="flex flex-col items-end justify-between gap-3">
                                                 <button
                                                     onClick={() => setSelectedDoc(v)}
-                                                    className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
+                                                    className="inline-flex items-center justify-center w-12 h-12 rounded-3xl bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all shadow-sm"
                                                 >
                                                     <MdVisibility className="text-xl" />
                                                 </button>
-                                            </td>
-                                        </tr>
+                                                <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${
+                                                    v.status === "Approved" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                                                    v.status === "Rejected" ? "bg-red-50 text-red-600 border border-red-100" :
+                                                    v.status === "Analyzing" ? "bg-amber-50 text-amber-700 border border-amber-100" :
+                                                    "bg-sky-50 text-sky-700 border border-sky-100"
+                                                }`}>
+                                                    {v.status || "Doc Received"}
+                                                </span>
+                                            </div>
+                                        </motion.div>
                                     ))
                                 )}
-                            </Table>
+                            </div>
                         </div>
-                    </div>
-                )
-                }
-            </main >
+                    )}
+                </main>
+            </div>
 
-            {/* Document Viewer Modal */}
-            < AnimatePresence >
+            {/* ===================== MODALS ===================== */}
+            <AnimatePresence>
                 {selectedDoc && (
                     <DocumentViewer
                         visa={selectedDoc}
@@ -662,33 +1455,22 @@ export default function SubAdminPanel() {
                         }}
                     />
                 )}
-                {
-                    historyVisa && (
-                        <EditHistoryModal
-                            visa={historyVisa}
-                            onClose={() => setHistoryVisa(null)}
-                        />
-                    )
-                }
-            </AnimatePresence >
-        </div >
-    );
-}
-
-// --- REUSABLE UI ELEMENTS ---
-function KPIBox({ label, value, color }) {
-    return (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-            <h3 className={`text-2xl font-black ${color}`}>{value}</h3>
+                {historyVisa && (
+                    <EditHistoryModal
+                        visa={historyVisa}
+                        onClose={() => setHistoryVisa(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }
 
+// --- REUSABLE TABLE ---
 function Table({ head, children }) {
     return (
         <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <thead className="bg-gray-50 border-b border-gray-200 text-[12px] font-bold text-gray-400 uppercase tracking-widest">
                 <tr>{head.map(h => <th key={h} className="p-5">{h}</th>)}</tr>
             </thead>
             <tbody>{children}</tbody>

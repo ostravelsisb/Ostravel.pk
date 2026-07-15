@@ -55,7 +55,9 @@ const VisaConfirmation = lazy(() => import('./Pages/VisaConfirmation'));
 
 function App() {
   const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isAdminRoute =
+  location.pathname.startsWith('/admin') ||
+  location.pathname.startsWith('/subadmin');
 
   return (
     <>

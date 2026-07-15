@@ -157,35 +157,54 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
             <motion.div
-                initial={{ opacity: 0, y: 50 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, y: 40, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
                 className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl h-[95vh] overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white flex justify-between items-center">
+                <div className="bg-gradient-to-r from-orange-500 to-orange-400 p-6 text-white flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-4">
-                        <div className="bg-emerald-500 p-3 rounded-xl shadow-lg"><FaPassport className="text-2xl" /></div>
+                        <motion.div
+                            initial={{ scale: 0.6, rotate: -8, opacity: 0 }}
+                            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 18 }}
+                            className="bg-white/15 p-3 rounded-xl shadow-lg backdrop-blur-sm"
+                        >
+                            <FaPassport className="text-2xl" />
+                        </motion.div>
                         <div>
                             <h2 className="text-2xl font-black tracking-tight">Admin Document Review</h2>
-                            <p className="text-slate-300 text-sm font-mono mt-1">{visa.applicationNumber} • {visa.applicantName}</p>
+                            <p className="text-orange-50 text-sm font-mono mt-1">{visa.applicationNumber} • {visa.applicantName}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="hover:bg-white/10 p-2 rounded-full transition"><MdClose className="text-2xl" /></button>
+                    <motion.button
+                        whileHover={{ scale: 1.1, rotate: 90 }}
+                        whileTap={{ scale: 0.9 }}
+                        transition={{ duration: 0.2 }}
+                        onClick={onClose}
+                        className="hover:bg-white/15 p-2 rounded-full transition-colors"
+                    >
+                        <MdClose className="text-2xl" />
+                    </motion.button>
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* Sidebar */}
                     <div className="w-80 bg-slate-50 border-r border-slate-200 overflow-y-auto">
                         <div className="p-4">
-                            <button
+                            <motion.button
                                 onClick={() => setSelectedDoc(null)}
-                                className={`w-full text-left p-4 rounded-xl border-2 mb-4 transition-all ${!selectedDoc ? 'border-emerald-600 bg-white shadow-md' : 'border-transparent bg-slate-100 hover:bg-slate-200'}`}
+                                whileHover={{ x: 2 }}
+                                whileTap={{ scale: 0.98 }}
+                                className={`w-full text-left p-4 rounded-xl border-2 mb-4 transition-colors ${!selectedDoc ? 'border-orange-500 bg-white shadow-md' : 'border-transparent bg-slate-100 hover:bg-slate-200'}`}
                             >
                                 <p className="font-black text-slate-800 text-sm">📋 Application Details</p>
-                            </button>
+                            </motion.button>
 
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">Uploaded Documents</p>
 
@@ -196,11 +215,18 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
                                     <MdErrorOutline /> No documents found
                                 </div>
                             ) : (
-                                <div className="space-y-2">
+                                <motion.div
+                                    className="space-y-2"
+                                    initial="hidden"
+                                    animate="show"
+                                    variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
+                                >
                                     {docCategories.map((doc) => (
-                                        <div
+                                        <motion.div
                                             key={doc.key}
-                                            className={`rounded-xl border-2 transition-all ${selectedDoc?.key === doc.key ? 'border-emerald-500 bg-white shadow-md' : 'border-transparent hover:bg-slate-200'}`}
+                                            variants={{ hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0 } }}
+                                            whileHover={{ x: 2 }}
+                                            className={`rounded-xl border-2 transition-colors ${selectedDoc?.key === doc.key ? 'border-orange-500 bg-white shadow-md' : 'border-transparent hover:bg-slate-200'}`}
                                         >
                                             <div
                                                 onClick={() => setSelectedDoc(doc)}
@@ -213,32 +239,38 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
                                             </div>
 
                                             <div className="px-3 pb-3 space-y-1">
-                                                <button
+                                                <motion.button
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.97 }}
                                                     onClick={(e) => { e.stopPropagation(); handleVerifyDocument(doc.key); }}
-                                                    className={`w-full text-[10px] font-black py-1.5 rounded-lg transition-all ${verifiedDocs[doc.key] ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                                                    className={`w-full text-[10px] font-black py-1.5 rounded-lg transition-colors ${verifiedDocs[doc.key] ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
                                                 >
                                                     {verifiedDocs[doc.key] ? '✓ VERIFIED' : 'MARK AS VERIFIED'}
-                                                </button>
+                                                </motion.button>
 
-                                                <button
+                                                <motion.button
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.97 }}
                                                     onClick={(e) => { e.stopPropagation(); handleRequestReupload(doc.key, doc.label); }}
                                                     disabled={requesting === doc.key}
-                                                    className="w-full text-[10px] font-black py-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-all disabled:opacity-50"
+                                                    className="w-full text-[10px] font-black py-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors disabled:opacity-50"
                                                 >
                                                     {requesting === doc.key ? 'SENDING...' : '⚠ REQUEST RE-UPLOAD'}
-                                                </button>
+                                                </motion.button>
 
-                                                <button
+                                                <motion.button
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.97 }}
                                                     onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.key); }}
                                                     disabled={deleting === doc.key}
-                                                    className="w-full text-[10px] font-black py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-all disabled:opacity-50"
+                                                    className="w-full text-[10px] font-black py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors disabled:opacity-50"
                                                 >
                                                     {deleting === doc.key ? 'DELETING...' : '🗑 DELETE DOCUMENT'}
-                                                </button>
+                                                </motion.button>
                                             </div>
-                                        </div>
+                                        </motion.div>
                                     ))}
-                                </div>
+                                </motion.div>
                             )}
                         </div>
                     </div>
@@ -267,13 +299,29 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
                             </div>
                         ) : (
                             <div className="flex-1 bg-white p-8 overflow-y-auto">
-                                <h3 className="text-3xl font-black text-slate-900 mb-8 border-b-4 border-emerald-500 inline-block pb-2">Complete Application Review</h3>
+                                <motion.h3
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="text-3xl font-black text-slate-900 mb-8 border-b-4 border-orange-500 inline-block pb-2"
+                                >
+                                    Complete Application Review
+                                </motion.h3>
 
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <motion.div
+                                    className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+                                    initial="hidden"
+                                    animate="show"
+                                    variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }}
+                                >
                                     {/* Personal Information */}
-                                    <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 border border-slate-200">
+                                    <motion.div
+                                        variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                        whileHover={{ y: -3 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 border border-slate-200"
+                                    >
                                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                            <div className="w-8 h-0.5 bg-emerald-500"></div>
+                                            <div className="w-8 h-0.5 bg-orange-500"></div>
                                             Personal Info
                                         </h4>
                                         <div className="space-y-4">
@@ -284,10 +332,15 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
                                             <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</label><p className="text-sm font-medium text-slate-700 mt-1">{visa.age || 'N/A'}</p></div>
                                             <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Passport #</label><p className="text-sm font-mono font-bold text-slate-700 mt-1">{visa.passportNumber || 'N/A'}</p></div>
                                         </div>
-                                    </div>
+                                    </motion.div>
 
                                     {/* Travel Details */}
-                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
+                                    <motion.div
+                                        variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                        whileHover={{ y: -3 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200"
+                                    >
                                         <h4 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                                             <div className="w-8 h-0.5 bg-blue-500"></div>
                                             Travel Details
@@ -300,10 +353,15 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
                                             <div><label className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Stay Duration</label><p className="text-sm font-medium text-blue-700 mt-1">{visa.stayDuration || 'N/A'}</p></div>
                                             <div><label className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Urgent Processing</label><p className="text-sm font-bold text-blue-700 mt-1">{visa.urgentProcessing ? 'YES' : 'NO'}</p></div>
                                         </div>
-                                    </div>
+                                    </motion.div>
 
                                     {/* Payment & Status */}
-                                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200">
+                                    <motion.div
+                                        variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                        whileHover={{ y: -3 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200"
+                                    >
                                         <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                                             <div className="w-8 h-0.5 bg-emerald-500"></div>
                                             Payment & Status
@@ -315,8 +373,8 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
                                             <div><label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Application Status</label><p className="text-sm font-bold text-emerald-700 mt-1">{visa.status || 'Pending'}</p></div>
                                             <div><label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Payment Status</label><p className="text-sm font-medium text-emerald-700 mt-1">{visa.paymentStatus || 'Completed'}</p></div>
                                         </div>
-                                    </div>
-                                </div>
+                                    </motion.div>
+                                </motion.div>
 
                                 {/* Application Metadata */}
                                 <div className="mt-8 bg-slate-50 rounded-2xl p-6 border border-slate-200">

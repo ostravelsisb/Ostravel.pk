@@ -29,30 +29,42 @@ import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUtils";
-import { sendStatusChangeEmail, sendEditAccessEmail } from "../Utils/emailService";
+import { sendStatusChangeEmail, sendEditAccessEmail, sendUmrahStatusEmail, sendUmrahMessageEmail, sendAdminMessageEmail } from "../Utils/emailService";
+import ToastContainer, { notify } from "../Components/Toast";
 
-// ─── MODERN STATUS DROPDOWN ──────────────────────────────────────────────────
-const ModernStatusDropdown = ({ currentStatus, onChange, loading, isVisa = false }) => {
+// ─── ANIMATION VARIANTS ───────────────────────────────────────────────────────
+const fadeUp = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } }
+};
+const stagger = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.07 } }
+};
+
+// ─── STATUS CONFIG ────────────────────────────────────────────────────────────
+const UMRAH_STATUS_STYLES = {
+    "Pending":       { dot: "bg-amber-400",   pill: "bg-amber-50 text-amber-600 border-amber-200" },
+    "Investigating": { dot: "bg-blue-400",    pill: "bg-blue-50 text-blue-600 border-blue-200" },
+    "Processing":    { dot: "bg-purple-400",  pill: "bg-purple-50 text-purple-600 border-purple-200" },
+    "Completed":     { dot: "bg-emerald-400", pill: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+    "Cancelled":     { dot: "bg-red-400",     pill: "bg-red-50 text-red-500 border-red-200" },
+};
+
+// ─── MODERN STATUS DROPDOWN (matches Sub-Admin Panel) ────────────────────────
+const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = React.useRef(null);
-    const options = isVisa
-        ? ["Doc Received", "Analyzing", "Approved", "Rejected"]
-        : ["Pending", "Investigating", "Processing", "Completed", "Cancelled"];
+    const options = ["Doc Received", "Analyzing", "Approved", "Rejected"];
 
-    const statusColors = isVisa ? {
+    const statusColors = {
         "Doc Received": { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200", dot: "bg-sky-500" },
         "Analyzing": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
         "Approved": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
         "Rejected": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
-    } : {
-        "Pending": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
-        "Investigating": { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500" },
-        "Processing": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
-        "Completed": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
-        "Cancelled": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
     };
 
-    const currentColor = statusColors[currentStatus || (isVisa ? "Doc Received" : "Pending")];
+    const currentColor = statusColors[currentStatus] || statusColors["Doc Received"];
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -74,7 +86,7 @@ const ModernStatusDropdown = ({ currentStatus, onChange, loading, isVisa = false
             >
                 <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${currentColor.dot}`} />
-                    <span>{currentStatus || (isVisa ? "Doc Received" : "Pending")}</span>
+                    <span>{currentStatus || "Doc Received"}</span>
                 </div>
                 <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                     {loading ? (
@@ -127,25 +139,6 @@ const ModernStatusDropdown = ({ currentStatus, onChange, loading, isVisa = false
     );
 };
 
-// ─── ANIMATION VARIANTS ───────────────────────────────────────────────────────
-const fadeUp = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } }
-};
-const stagger = {
-    hidden: {},
-    show: { transition: { staggerChildren: 0.07 } }
-};
-
-// ─── STATUS CONFIG ────────────────────────────────────────────────────────────
-const UMRAH_STATUS_STYLES = {
-    "Pending":       { dot: "bg-amber-400",   pill: "bg-amber-50 text-amber-600 border-amber-200" },
-    "Investigating": { dot: "bg-blue-400",    pill: "bg-blue-50 text-blue-600 border-blue-200" },
-    "Processing":    { dot: "bg-purple-400",  pill: "bg-purple-50 text-purple-600 border-purple-200" },
-    "Completed":     { dot: "bg-emerald-400", pill: "bg-emerald-50 text-emerald-600 border-emerald-200" },
-    "Cancelled":     { dot: "bg-red-400",     pill: "bg-red-50 text-red-500 border-red-200" },
-};
-
 // ─── SUB-COMPONENT: LIVE ACTION PANEL ────────────────────────────────────────
 const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
     const [msg, setMsg] = useState(item.adminMessage || "");
@@ -168,7 +161,7 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
                     reason: msg,
                 });
             }
-        } catch (e) { alert("Toggle failed"); }
+        } catch (e) { notify.error("Toggle failed"); }
         setIsToggling(false);
     };
 
@@ -178,8 +171,17 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
         try {
             await saveAdminMessage(item.id, collectionName, msg);
             onLocalUpdate(item.id, { adminMessage: msg });
-            alert("Instruction sent to user dashboard");
-        } catch (e) { alert("Message failed"); }
+            if (collectionName === "visaApplications") {
+                sendAdminMessageEmail({
+                    to: item.email,
+                    applicantName: item.applicantName,
+                    applicationNumber: item.applicationNumber,
+                    country: item.country,
+                    message: msg,
+                });
+            }
+            notify.success(item.email ? "Message sent to dashboard & emailed to client" : "Message sent to dashboard");
+        } catch (e) { notify.error("Message failed"); }
         setIsSending(false);
     };
 
@@ -222,8 +224,9 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
 };
 
 // ─── SUB-COMPONENT: STATUS DROPDOWN ──────────────────────────────────────────
-const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = false, applicant }) => {
+const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = false, isUmrah = false, applicant, inquiry }) => {
     const [loading, setLoading] = useState(false);
+    const options = ["Pending", "Investigating", "Processing", "Completed", "Cancelled"];
 
     const handleChange = async (e) => {
         const val = e.target.value;
@@ -243,17 +246,100 @@ const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = 
                     newStatus: val,
                 });
             }
+            if (isUmrah && inquiry) {
+                sendUmrahStatusEmail({
+                    to: inquiry.user?.email,
+                    applicantName: inquiry.user?.name,
+                    hotel: inquiry.makkah?.hotel,
+                    checkIn: inquiry.makkah?.checkIn,
+                    checkOut: inquiry.makkah?.checkOut,
+                    oldStatus,
+                    newStatus: val,
+                });
+            }
         } catch (e) { console.error(e); }
         setLoading(false);
     };
 
+    // Visa applications use the modern pill-style dropdown to match the Sub-Admin panel
+    if (isVisa) {
+        return (
+            <ModernStatusDropdown
+                currentStatus={currentStatus}
+                onChange={handleChange}
+                loading={loading}
+            />
+        );
+    }
+
     return (
-        <ModernStatusDropdown 
-            currentStatus={currentStatus}
+        <select
+            value={currentStatus || "Pending"}
             onChange={handleChange}
-            loading={loading}
-            isVisa={isVisa}
-        />
+            className={`text-[13px] font-bold px-3 py-1 rounded-full border border-slate-200 focus:ring-2 focus:ring-orange-400 outline-none bg-white cursor-pointer ${loading ? 'opacity-50' : ''}`}
+        >
+            {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+    );
+};
+
+// ─── SUB-COMPONENT: UMRAH MESSAGE BOX (functional — saves + emails the client) ──
+const UmrahMessageBox = ({ inquiry, onLocalUpdate }) => {
+    const [msg, setMsg] = useState("");
+    const [isSending, setIsSending] = useState(false);
+    const [justSent, setJustSent] = useState(false);
+
+    const handleSend = async () => {
+        if (!msg.trim()) return;
+        setIsSending(true);
+        try {
+            await saveAdminMessage(inquiry.id, "umardet", msg);
+            onLocalUpdate('umrah', inquiry.id, { adminMessage: msg });
+            sendUmrahMessageEmail({
+                to: inquiry.user?.email,
+                applicantName: inquiry.user?.name,
+                hotel: inquiry.makkah?.hotel,
+                message: msg,
+            });
+            setMsg("");
+            setJustSent(true);
+            notify.success(inquiry.user?.email ? "Message sent & emailed to client" : "Message sent (no client email on file)");
+            setTimeout(() => setJustSent(false), 2500);
+        } catch (e) {
+            console.error(e);
+            notify.error("Message failed");
+        }
+        setIsSending(false);
+    };
+
+    return (
+        <div className="flex-1 min-w-[240px]">
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-orange-400/40 focus-within:border-orange-300 transition-all">
+                <MdChat className="shrink-0 text-orange-400 text-base" />
+                <input
+                    type="text"
+                    value={msg}
+                    onChange={(e) => setMsg(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                    disabled={isSending || !inquiry.user?.email}
+                    placeholder={inquiry.user?.email ? "Message the client (also emailed)..." : "No client email on file"}
+                    className="flex-1 text-sm outline-none placeholder:text-gray-400 bg-transparent text-gray-700 disabled:opacity-50"
+                />
+                <button
+                    onClick={handleSend}
+                    disabled={isSending || !msg.trim()}
+                    className="shrink-0 text-orange-500 hover:text-orange-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {isSending
+                        ? <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-orange-500 border-t-transparent" />
+                        : <FaRegPaperPlane className="text-sm" />}
+                </button>
+            </div>
+            {justSent && <p className="text-[11px] font-bold text-emerald-500 mt-1 pl-1">✓ Sent &amp; emailed to client</p>}
+            {inquiry.adminMessage && !justSent && (
+                <p className="text-[11px] text-gray-400 mt-1 pl-1 truncate">Last note: {inquiry.adminMessage}</p>
+            )}
+        </div>
     );
 };
 
@@ -347,84 +433,58 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
                         <p className="text-gray-500 font-bold">No queries found</p>
                         <p className="text-sm text-gray-400 mt-1">Try adjusting your search or filter</p>
                     </motion.div>
-                ) : filtered.map((u, idx) => {
+                ) : filtered.map((u) => {
                     const isOpen = expandedId === u.id;
                     const statusStyle = UMRAH_STATUS_STYLES[u.status || "Pending"] || UMRAH_STATUS_STYLES["Pending"];
+                    const meta = [
+                        u.makkah?.rooms ? `${u.makkah.rooms} Rooms` : null,
+                        u.makkah?.guests ? `${u.makkah.guests} Guests` : null,
+                        u.transport?.vehicleType || null,
+                    ].filter(Boolean);
 
                     return (
                         <motion.div key={u.id} variants={fadeUp} layout
-                            className={`bg-white rounded-2xl border transition-all duration-200 shadow-sm overflow-hidden ${isOpen ? "border-orange-200 shadow-orange-100/60 shadow-md" : "border-gray-200 hover:border-gray-300 hover:shadow-md"}`}
+                            className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden ${isOpen ? "border-orange-200 shadow-md shadow-orange-100/50" : "border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
                         >
-                            {/* Card Header */}
-                            <div className="flex items-stretch">
-                                {/* Color accent bar */}
-                                <div className={`w-1 shrink-0 rounded-l-2xl ${isOpen ? "bg-orange-400" : "bg-transparent"} transition-colors`} />
-
-                                <div className="flex-1 p-5">
-                                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-
-                                        {/* Index + Client */}
-                                        <div className="flex items-center gap-3 lg:w-52 shrink-0">
-                                            <span className="w-8 h-8 rounded-xl bg-sky-50 text-sky-500 text-sm font-bold flex items-center justify-center shrink-0">
-                                                {idx + 1}
-                                            </span>
-                                            <div className="min-w-0">
-                                                <p className="font-bold text-gray-800 truncate">{u.user?.name || "Unknown Client"}</p>
-                                                <p className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
-                                                    <MdPhone className="text-gray-300" /> {u.user?.contact || "—"}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Hotel Info */}
-                                        <div className="flex items-center gap-2 lg:w-52 shrink-0 min-w-0">
-                                            <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
-                                                <MdHotel className="text-orange-400 text-base" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-bold text-gray-700 truncate">{u.makkah?.hotel || "—"}</p>
-                                                <p className="text-xs text-blue-500 font-semibold mt-0.5">{u.makkah?.checkIn} → {u.makkah?.checkOut}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Details chips */}
-                                        <div className="flex flex-wrap gap-2 flex-1">
-                                            {u.transport?.vehicleType && (
-                                                <span className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
-                                                    <MdDirectionsBus className="text-gray-400" /> {u.transport.vehicleType}
-                                                </span>
-                                            )}
-                                            {u.makkah?.rooms && (
-                                                <span className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
-                                                    <FaBed className="text-gray-400" /> {u.makkah.rooms} Rooms
-                                                </span>
-                                            )}
-                                            {u.makkah?.guests && (
-                                                <span className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">
-                                                    <MdPerson className="text-gray-400" /> {u.makkah.guests} Guests
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Status + Toggle */}
-                                        <div className="flex items-center gap-3 shrink-0">
-                                            <span className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border ${statusStyle.pill}`}>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`}></span>
-                                                {u.status || "Pending"}
-                                            </span>
-                                            <button
-                                                onClick={() => setExpandedId(isOpen ? null : u.id)}
-                                                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${isOpen
-                                                    ? "bg-orange-500 text-white"
-                                                    : "border border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-500"}`}
-                                            >
-                                                <MdEdit className="text-base" />
-                                                {isOpen ? "Close" : "Update"}
-                                            </button>
-                                        </div>
+                            {/* Card Header — one clean row: client, hotel, status, action */}
+                            <button
+                                onClick={() => setExpandedId(isOpen ? null : u.id)}
+                                className="w-full text-left flex flex-col sm:flex-row sm:items-center gap-4 p-4"
+                            >
+                                {/* Client */}
+                                <div className="flex items-center gap-3 sm:w-48 shrink-0">
+                                    <span className="w-10 h-10 rounded-xl bg-sky-50 text-sky-500 text-sm font-bold flex items-center justify-center shrink-0">
+                                        {(u.user?.name || "?").charAt(0).toUpperCase()}
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-gray-800 truncate text-sm">{u.user?.name || "Unknown Client"}</p>
+                                        <p className="text-xs text-gray-400 truncate">{u.user?.contact || "—"}</p>
                                     </div>
                                 </div>
-                            </div>
+
+                                {/* Hotel + meta, single line, subtle */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-gray-700 truncate flex items-center gap-1.5">
+                                        <MdHotel className="text-orange-400 shrink-0" /> {u.makkah?.hotel || "No hotel selected"}
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5 truncate">
+                                        {u.makkah?.checkIn && u.makkah?.checkOut ? `${u.makkah.checkIn} → ${u.makkah.checkOut}` : "Dates not set"}
+                                        {meta.length > 0 && <span className="mx-1.5 text-gray-300">•</span>}
+                                        {meta.join(" · ")}
+                                    </p>
+                                </div>
+
+                                {/* Status + chevron */}
+                                <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+                                    <span className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border ${statusStyle.pill}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`}></span>
+                                        {u.status || "Pending"}
+                                    </span>
+                                    <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                        <MdKeyboardArrowDown className="text-xl text-gray-400" />
+                                    </motion.div>
+                                </div>
+                            </button>
 
                             {/* Expandable Update Panel */}
                             <AnimatePresence>
@@ -436,20 +496,19 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
                                         transition={{ duration: 0.25 }}
                                         className="overflow-hidden"
                                     >
-                                        <div className="px-5 pb-5 pt-3 bg-orange-50/40 border-t border-orange-100 flex flex-col sm:flex-row sm:items-center gap-4">
-                                            <div className="flex items-center gap-3">
+                                        <div className="px-4 pb-4 pt-3 bg-orange-50/40 border-t border-orange-100 flex flex-col sm:flex-row sm:items-start gap-3">
+                                            <div className="flex items-center gap-3 shrink-0">
                                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Status</label>
                                                 <StatusDropdown
                                                     id={u.id}
                                                     currentStatus={u.status}
                                                     collectionName="umardet"
                                                     onUpdate={(id, up) => updateLocal('umrah', id, up)}
+                                                    isUmrah
+                                                    inquiry={u}
                                                 />
                                             </div>
-                                            <div className="flex-1 flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-400">
-                                                <MdChat className="shrink-0 text-orange-300" />
-                                                <span className="italic">Client notes / admin memo area</span>
-                                            </div>
+                                            <UmrahMessageBox inquiry={u} onLocalUpdate={updateLocal} />
                                         </div>
                                     </motion.div>
                                 )}
@@ -459,6 +518,7 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
                 })}
             </motion.div>
         </motion.div>
+
     );
 }
 
@@ -724,6 +784,10 @@ export default function AdminDashboard() {
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [salesPeriod, setSalesPeriod] = useState("This Year");
+    const [overallPeriod, setOverallPeriod] = useState("Last 6 Months");
+    const [showSalesDropdown, setShowSalesDropdown] = useState(false);
+    const [showOverallDropdown, setShowOverallDropdown] = useState(false);
     const { currentUser } = useAuth();
     const navigate = useNavigate();
 
@@ -779,6 +843,59 @@ export default function AdminDashboard() {
     const filteredInquiries = useMemo(() => inquiries.filter(i => isWithinDateRange(i.createdAt)), [inquiries, startDate, endDate]);
     const filteredMessages = useMemo(() => messages.filter(m => isWithinDateRange(m.createdAt)), [messages, startDate, endDate]);
 
+    // ── Sales period helper ──────────────────────────────────────
+    const getSalesCutoff = (period) => {
+        const now = new Date();
+        if (period === "This Year") return new Date(now.getFullYear(), 0, 1);
+        if (period === "Last Year") return new Date(now.getFullYear() - 1, 0, 1);
+        if (period === "Last 3 Months") { const d = new Date(now); d.setMonth(d.getMonth() - 3); return d; }
+        if (period === "Last 6 Months") { const d = new Date(now); d.setMonth(d.getMonth() - 6); return d; }
+        if (period === "Last 12 Months") { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return d; }
+        return new Date(now.getFullYear(), 0, 1);
+    };
+    const getSalesEndDate = (period) => {
+        if (period === "Last Year") return new Date(new Date().getFullYear() - 1, 11, 31, 23, 59, 59);
+        return new Date();
+    };
+
+    const salesChartData = useMemo(() => {
+        const cutoff = getSalesCutoff(salesPeriod);
+        const endDt = getSalesEndDate(salesPeriod);
+        // Group by month for multi-month periods, by day-of-week for short periods
+        const useMonthly = ["This Year", "Last Year", "Last 12 Months"].includes(salesPeriod);
+        if (useMonthly) {
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const totals = months.map(m => ({ day: m, applications: 0, revenue: 0 }));
+            visas.forEach(v => {
+                const d = parseDate(v.applicationDate);
+                if (d && d >= cutoff && d <= endDt) totals[d.getMonth()].applications += 1;
+            });
+            policies.forEach(p => {
+                const d = parseDate(p.purchaseDate);
+                if (d && d >= cutoff && d <= endDt) totals[d.getMonth()].revenue += (Number(p.amount) || 0) / 1000;
+            });
+            // For "Last Year" only show that year's months; for "This Year" trim future months
+            if (salesPeriod === "This Year") {
+                const currentMonth = new Date().getMonth();
+                return totals.slice(0, currentMonth + 1);
+            }
+            return totals;
+        } else {
+            const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+            const totals = days.map(d => ({ day: d, applications: 0, revenue: 0 }));
+            visas.forEach(v => {
+                const d = parseDate(v.applicationDate);
+                if (d && d >= cutoff && d <= endDt) totals[d.getDay()].applications += 1;
+            });
+            policies.forEach(p => {
+                const d = parseDate(p.purchaseDate);
+                if (d && d >= cutoff && d <= endDt) totals[d.getDay()].revenue += (Number(p.amount) || 0) / 1000;
+            });
+            return totals;
+        }
+    }, [visas, policies, salesPeriod]);
+
+    // Keep weeklyOverview for backward compat with other usages
     const weeklyOverview = useMemo(() => {
         const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         const totals = days.map(d => ({ day: d, applications: 0, revenue: 0 }));
@@ -788,9 +905,16 @@ export default function AdminDashboard() {
     }, [visas, policies]);
 
     const donutData = useMemo(() => {
-        const approved = visas.filter(v => v.status === "Approved").length;
-        const pending = visas.filter(v => v.status === "Doc Received" || v.status === "Analyzing").length;
-        const rejected = visas.filter(v => v.status === "Rejected").length;
+        const now = new Date();
+        let cutoff = null;
+        if (overallPeriod === "Last 3 Months") { cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 3); }
+        else if (overallPeriod === "Last 6 Months") { cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 6); }
+        else if (overallPeriod === "Last 12 Months") { cutoff = new Date(now); cutoff.setFullYear(cutoff.getFullYear() - 1); }
+        else if (overallPeriod === "This Year") { cutoff = new Date(now.getFullYear(), 0, 1); }
+        const filtered = cutoff ? visas.filter(v => { const d = parseDate(v.applicationDate); return d && d >= cutoff; }) : visas;
+        const approved = filtered.filter(v => v.status === "Approved").length;
+        const pending = filtered.filter(v => v.status === "Doc Received" || v.status === "Analyzing").length;
+        const rejected = filtered.filter(v => v.status === "Rejected").length;
         const total = approved + pending + rejected;
         return {
             total, approved, pending, rejected,
@@ -802,7 +926,7 @@ export default function AdminDashboard() {
                 { name: "Rejected", value: rejected || 0.0001, color: "#E2E8F0" },
             ],
         };
-    }, [visas]);
+    }, [visas, overallPeriod]);
 
     const recentActivity = useMemo(() => {
         const items = [
@@ -823,18 +947,25 @@ export default function AdminDashboard() {
     ];
 
     const pageTitle = activeTab === "overview" ? "Dashboard" : navItems.find(n => n.id === activeTab)?.label || activeTab;
-    const pageSubtitle = {
-        overview: "Your travel agency overview",
-        visas: "Manage and process all visa applications",
-        inquiries: "Track Umrah package inquiries and bookings",
-        messages: "Customer messages and support requests",
-        subadmins: "Team access control and permissions",
-    }[activeTab] || "\u00A0";
+    const visaCountries = useMemo(() => {
+        const set = new Set(visas.map(v => v.country).filter(Boolean));
+        return set.size;
+    }, [visas]);
+
+    const pageSubtitle = activeTab === "visas"
+        ? null
+        : ({
+            overview: "Your travel agency overview",
+            inquiries: "Track Umrah package inquiries and bookings",
+            messages: "Customer messages and support requests",
+            subadmins: "Team access control and permissions",
+        }[activeTab] || "\u00A0");
 
     return (
         <div className="flex h-screen bg-[#f5f5f5] overflow-hidden"
             style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif" }}>
             <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
+            <ToastContainer />
 
             {/* ─── SIDEBAR ─────────────────────────────────────────── */}
             <aside className={`${sidebarCollapsed ? "w-[70px]" : "w-[200px]"} bg-white flex flex-col border-r border-gray-200 transition-all duration-300 shrink-0`} style={{ minHeight: "100vh" }}>
@@ -1001,33 +1132,15 @@ export default function AdminDashboard() {
                         className="mb-7"
                     >
                         <h1 className="text-4xl font-bold text-slate-800 capitalize tracking-tight">{pageTitle}</h1>
-                        <p className="text-base text-gray-500 font-medium mt-1">{pageSubtitle}</p>
+                        {activeTab === "visas" ? (
+                            <p className="text-base text-gray-500 font-medium mt-1">
+                                Managing applications for{" "}
+                                <span className="text-orange-500 font-bold">{visaCountries} {visaCountries === 1 ? "country" : "countries"}</span>
+                            </p>
+                        ) : (
+                            <p className="text-base text-gray-500 font-medium mt-1">{pageSubtitle}</p>
+                        )}
                     </motion.div>
-
-                    {/* Date Filters — only for visas tab */}
-                    {activeTab === "visas" && (
-                        <div className="mb-6 flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-500 mb-1">Start Date</label>
-                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                                    className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-slate-500 mb-1">End Date</label>
-                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                                    className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none" />
-                            </div>
-                            {(startDate || endDate) && (
-                                <button onClick={() => { setStartDate(''); setEndDate(''); }}
-                                    className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-base font-bold hover:bg-slate-200 transition-colors">
-                                    Clear Filters
-                                </button>
-                            )}
-                            <span className="ml-auto text-sm font-bold text-slate-400 self-center">
-                                Showing {startDate || 'Start'} to {endDate || 'Now'}
-                            </span>
-                        </div>
-                    )}
 
                     {/* ════ OVERVIEW TAB ════ */}
                     {activeTab === "overview" && (
@@ -1112,10 +1225,27 @@ export default function AdminDashboard() {
                                 <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                                     <div className="flex items-center justify-between mb-5">
                                         <h3 className="text-lg font-bold text-gray-800">Sales vs Purchase</h3>
-                                        <button className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors">This Year <MdKeyboardArrowDown /></button>
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => { setShowSalesDropdown(p => !p); setShowOverallDropdown(false); }}
+                                                className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                                            >
+                                                {salesPeriod} <MdKeyboardArrowDown />
+                                            </button>
+                                            {showSalesDropdown && (
+                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
+                                                    {["This Year", "Last Year", "Last 3 Months", "Last 6 Months", "Last 12 Months"].map(opt => (
+                                                        <button key={opt} onClick={() => { setSalesPeriod(opt); setShowSalesDropdown(false); }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${salesPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
+                                                            {opt}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     <ResponsiveContainer width="100%" height={280}>
-                                        <BarChart data={weeklyOverview} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={2} barCategoryGap="25%" barSize={22}>
+                                        <BarChart data={salesChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={2} barCategoryGap="25%" barSize={22}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                             <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                                             <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}k`} domain={[0, 'dataMax + 10']} label={{ value: '$ (thousands)', angle: -90, position: 'insideLeft', fontSize: 9, fill: '#9ca3af' }} />
@@ -1133,7 +1263,24 @@ export default function AdminDashboard() {
                                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
                                     <div className="flex items-center justify-between mb-2">
                                         <h3 className="text-lg font-bold text-gray-800">Overall Information</h3>
-                                        <button className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors">Last 6 Months <MdKeyboardArrowDown /></button>
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => { setShowOverallDropdown(p => !p); setShowSalesDropdown(false); }}
+                                                className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                                            >
+                                                {overallPeriod} <MdKeyboardArrowDown />
+                                            </button>
+                                            {showOverallDropdown && (
+                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
+                                                    {["Last 3 Months", "Last 6 Months", "Last 12 Months", "This Year"].map(opt => (
+                                                        <button key={opt} onClick={() => { setOverallPeriod(opt); setShowOverallDropdown(false); }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${overallPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
+                                                            {opt}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     <p className="text-sm font-semibold text-gray-400 mb-5">Applications Overview</p>
                                     <div className="flex items-center gap-4 mb-2">
@@ -1263,7 +1410,7 @@ export default function AdminDashboard() {
 
                     {/* ════ VISAS TAB ════ */}
                     {activeTab === "visas" && (
-                        <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} />
+                        <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} />
                     )}
 
                     {/* ════ UMRAH QUERIES TAB ════ */}
@@ -1298,36 +1445,141 @@ export default function AdminDashboard() {
     );
 }
 
-// ─── VISA PROCESS LIST ────────────────────────────────────────────────────────
-const VISA_STEPS = ["Submitted", "Appointment", "Visa Decision", "Delivered"];
+// ─── COUNTRY DROPDOWN (mirrors SubAdmin ModernCountryDropdown) ────────────────
+function AdminCountryDropdown({ value, onChange, countries }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = React.useRef(null);
 
-function stepIndexForStatus(status) {
-    switch (status) {
-        case "Doc Received": return 0;
-        case "Analyzing": return 1;
-        case "Approved": return 3;
-        case "Rejected": return 2;
-        default: return 0;
-    }
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsOpen(!isOpen)}
+                className="appearance-none bg-gradient-to-r from-white to-gray-50 border-2 border-gray-200 hover:border-orange-300 rounded-2xl pl-4 pr-4 py-2.5 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-orange-400 outline-none cursor-pointer transition-all duration-200 flex items-center gap-2 min-w-[180px] justify-between shadow-sm hover:shadow-md"
+            >
+                <span className="truncate">{value === "All" ? "All Countries" : value}</span>
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <MdKeyboardArrowDown className="text-lg text-gray-400" />
+                </motion.div>
+            </motion.button>
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -12, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden min-w-[180px]"
+                    >
+                        <div className="p-2 space-y-1 max-h-64 overflow-y-auto">
+                            <motion.button
+                                whileHover={{ backgroundColor: "#FEF3C7" }}
+                                onClick={() => { onChange("All"); setIsOpen(false); }}
+                                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${value === "All" ? "bg-orange-500 text-white shadow-md shadow-orange-200" : "text-gray-700 hover:bg-orange-50"}`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${value === "All" ? "bg-white" : "bg-orange-500"}`} />
+                                    All Countries
+                                </div>
+                            </motion.button>
+                            <div className="my-1 border-t border-gray-100" />
+                            {countries.map(country => (
+                                <motion.button
+                                    key={country}
+                                    whileHover={{ backgroundColor: "#FEF3C7" }}
+                                    onClick={() => { onChange(country); setIsOpen(false); }}
+                                    className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${value === country ? "bg-orange-500 text-white shadow-md shadow-orange-200" : "text-gray-700 hover:bg-orange-50"}`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${value === country ? "bg-white" : "bg-orange-500"}`} />
+                                        {country}
+                                    </div>
+                                </motion.button>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
 }
 
-function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "" }) {
+// ─── VISA PROCESS LIST (Sub-Admin panel styled cards) ─────────────────────────
+function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "", startDate, setStartDate, endDate, setEndDate }) {
     const [search, setSearch] = useState(initialSearch);
-    const [expandedId, setExpandedId] = useState(null);
+    const [statusFilter, setStatusFilter] = useState("All");
+    const [countryFilter, setCountryFilter] = useState("All");
+
+    // Derive unique countries from visa data
+    const allCountries = useMemo(() => {
+        const set = new Set(visas.map(v => v.country).filter(Boolean));
+        return Array.from(set).sort();
+    }, [visas]);
+
+    const stats = useMemo(() => ({
+        total: visas.length,
+        docReceived: visas.filter(v => v.status === "Doc Received").length,
+        analyzing: visas.filter(v => v.status === "Analyzing").length,
+        approved: visas.filter(v => v.status === "Approved").length,
+        rejected: visas.filter(v => v.status === "Rejected").length,
+    }), [visas]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return visas;
-        return visas.filter(v =>
-            (v.applicantName || "").toLowerCase().includes(q) ||
-            (v.applicationNumber || "").toLowerCase().includes(q) ||
-            (v.status || "").toLowerCase().includes(q) ||
-            (v.country || "").toLowerCase().includes(q)
-        );
-    }, [visas, search]);
+        return visas.filter(v => {
+            const matchStatus = statusFilter === "All" || v.status === statusFilter;
+            const matchCountry = countryFilter === "All" || (v.country || "").toLowerCase() === countryFilter.toLowerCase();
+            const matchSearch = !q ||
+                (v.applicantName || "").toLowerCase().includes(q) ||
+                (v.applicationNumber || "").toLowerCase().includes(q) ||
+                (v.status || "").toLowerCase().includes(q) ||
+                (v.country || "").toLowerCase().includes(q);
+            return matchStatus && matchCountry && matchSearch;
+        });
+    }, [visas, search, statusFilter, countryFilter]);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-5">
+
+            {/* Date Filters */}
+            <div className="flex flex-wrap items-end gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div>
+                    <label className="block text-sm font-bold text-slate-500 mb-1">Start Date</label>
+                    <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-500 mb-1">End Date</label>
+                    <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="px-3 py-2 border border-slate-200 rounded-lg text-base font-medium focus:ring-2 focus:ring-orange-400 outline-none"
+                    />
+                </div>
+                {(startDate || endDate) && (
+                    <button
+                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                        className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-base font-bold hover:bg-slate-200 transition-colors"
+                    >
+                        Clear Filters
+                    </button>
+                )}
+            </div>
+
+            {/* Search */}
             <div className="flex items-center gap-2 bg-white px-4 py-3 rounded-2xl border border-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-orange-400/40 focus-within:border-orange-300 transition-all">
                 <MdSearch className="text-gray-400 text-xl" />
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, application no., status..."
@@ -1335,130 +1587,141 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                 {search && <button onClick={() => setSearch("")} className="text-gray-400 hover:text-orange-500"><MdClear /></button>}
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                {filtered.length === 0 ? (
-                    <div className="p-14 text-center">
-                        <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center mx-auto mb-3">
-                            <FaPassport className="text-orange-300 text-3xl" />
-                        </div>
-                        <p className="text-gray-500 font-bold">No visa applications found</p>
-                    </div>
-                ) : (
-                    <AnimatePresence initial={false}>
-                        {filtered.map((v, idx) => {
-                            const isOpen = expandedId === v.id;
-                            return (
-                                <motion.div key={v.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.25, delay: idx * 0.03 }}
-                                    className={`border-b border-gray-100 last:border-0 transition-colors ${isOpen ? "bg-blue-50/30" : "hover:bg-gray-50/60"}`}>
-                                    <div className="flex items-stretch gap-0 relative">
-                                        <div className={`w-1 shrink-0 rounded-r-full transition-colors ${isOpen ? "bg-orange-400" : "bg-transparent"}`}></div>
-                                        <div className="flex-1 flex flex-col xl:flex-row xl:items-center gap-4 lg:gap-6 py-5 px-5">
-                                            <div className="flex items-center gap-3 xl:w-56 shrink-0">
-                                                <span className="w-7 h-7 rounded-lg bg-orange-50 text-orange-500 text-[13px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
-                                                <div className="min-w-0">
-                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide truncate">{v.applicationNumber || v.id?.slice(0, 8)}</p>
-                                                    <p className="font-bold text-gray-800 truncate text-base">{v.applicantName}</p>
-                                                </div>
-                                            </div>
-                                            <div className="xl:w-36 shrink-0">
-                                                <StatusPill status={v.status} />
-                                                <ProgressBar step={stepIndexForStatus(v.status)} />
-                                            </div>
-                                            <div className="flex-1 min-w-0 overflow-x-auto">
-                                                <VisaStepTracker currentStep={stepIndexForStatus(v.status)} rejected={v.status === "Rejected"} />
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0 xl:justify-end">
-                                                <button onClick={() => setSelectedDoc(v)} className="p-2.5 bg-orange-50 text-orange-500 rounded-xl hover:bg-orange-500 hover:text-white transition-all" title="View documents">
-                                                    <MdVisibility className="text-xl" />
-                                                </button>
-                                                <button onClick={() => setExpandedId(isOpen ? null : v.id)}
-                                                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${isOpen ? "bg-orange-500 text-white" : "border border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-500"}`}>
-                                                    ✎ {isOpen ? "Close" : "Update"}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <AnimatePresence>
-                                        {isOpen && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden">
-                                                <div className="ml-1 px-6 pb-6 pt-1 flex flex-col sm:flex-row sm:items-center gap-4 bg-orange-50/40 border-t border-orange-100">
-                                                    <div className="sm:w-56 shrink-0">
-                                                        <StatusDropdown id={v.id} currentStatus={v.status} collectionName="visaApplications" onUpdate={(id, up) => updateLocal('visa', id, up)} isVisa applicant={v} />
-                                                    </div>
-                                                    <LiveActionPanel item={v} collectionName="visaApplications" onLocalUpdate={(id, up) => updateLocal('visa', id, up)} />
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
+            {/* Status Filter Pills + Country Dropdown */}
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-2 inline-flex gap-1.5 flex-wrap">
+                    {["All", "Doc Received", "Analyzing", "Approved", "Rejected"].map(status => (
+                        <button
+                            key={status}
+                            onClick={() => setStatusFilter(status)}
+                            className={`px-4 py-2 text-sm font-bold rounded-xl transition-all ${
+                                statusFilter === status
+                                    ? "bg-orange-500 text-white shadow-md shadow-orange-200"
+                                    : "hover:bg-gray-50 text-gray-500"
+                            }`}
+                        >
+                            {status}
+                            {status !== "All" && (
+                                <span className={`ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                                    statusFilter === status ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"
+                                }`}>
+                                    {status === "Doc Received" ? stats.docReceived :
+                                     status === "Analyzing" ? stats.analyzing :
+                                     status === "Approved" ? stats.approved :
+                                     stats.rejected}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                <AdminCountryDropdown
+                    value={countryFilter}
+                    onChange={setCountryFilter}
+                    countries={allCountries}
+                />
+
+                {countryFilter !== "All" && (
+                    <motion.button
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setCountryFilter("All")}
+                        className="flex items-center gap-1.5 bg-orange-50 text-orange-600 text-sm font-bold px-3 py-2.5 rounded-2xl hover:bg-orange-100 transition-colors border border-orange-200"
+                    >
+                        {countryFilter} <MdClear className="text-base" />
+                    </motion.button>
                 )}
             </div>
-        </div>
-    );
-}
 
-function StatusPill({ status }) {
-    const styles = {
-        "Doc Received": "bg-amber-50 text-amber-600",
-        "Analyzing": "bg-blue-50 text-blue-600",
-        "Approved": "bg-emerald-50 text-emerald-600",
-        "Rejected": "bg-red-50 text-red-500",
-    };
-    return <span className={`inline-block text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full ${styles[status] || "bg-gray-100 text-gray-500"}`}>{status || "Pending"}</span>;
-}
-
-function ProgressBar({ step }) {
-    const pct = Math.min(100, Math.round(((step + 1) / VISA_STEPS.length) * 100));
-    return (
-        <div className="flex items-center gap-2 mt-2">
-            <div className="flex-1 h-1.5 bg-orange-50 rounded-full overflow-hidden">
-                <motion.div className="h-full bg-orange-400 rounded-full" initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6, ease: "easeOut" }} />
-            </div>
-            <span className="text-[12px] font-bold text-gray-400 w-8 text-right">{pct}%</span>
-        </div>
-    );
-}
-
-function VisaStepTracker({ currentStep, rejected }) {
-    return (
-        <div className="flex items-start justify-between min-w-[380px]">
-            {VISA_STEPS.map((label, i) => {
-                const done = i < currentStep || (i === currentStep && i === VISA_STEPS.length - 1);
-                const active = i === currentStep && !done;
-                const isLast = i === VISA_STEPS.length - 1;
-                const failed = rejected && i === 2;
-                let circleClasses = "bg-gray-100 text-gray-400";
-                if (failed) circleClasses = "bg-red-500 text-white";
-                else if (done) circleClasses = "bg-orange-500 text-white";
-                else if (active) circleClasses = "bg-orange-100 text-orange-500 ring-2 ring-orange-400";
-                return (
-                    <React.Fragment key={label}>
-                        <div className="flex flex-col items-center gap-1.5 w-16 shrink-0">
-                            <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.3, delay: i * 0.05 }}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold relative ${circleClasses}`}>
-                                {active && !failed && (
-                                    <motion.span className="absolute inset-0 rounded-full bg-orange-400"
-                                        animate={{ scale: [1, 1.7], opacity: [0.45, 0] }} transition={{ duration: 1.4, repeat: Infinity, ease: "easeOut" }} />
-                                )}
-                                <span className="relative">{failed ? "✕" : done ? "✓" : i + 1}</span>
-                            </motion.div>
-                            <p className="text-[11px] font-bold text-gray-600 text-center leading-tight">{label}</p>
-                            <p className={`text-[10px] font-bold text-center leading-tight ${active ? "text-orange-500" : failed ? "text-red-500" : done ? "text-gray-400" : "text-gray-300"}`}>
-                                {failed ? "Rejected" : active ? "Pending" : done ? "Done" : "—"}
-                            </p>
+            {/* Visa Cards */}
+            <div className="space-y-4">
+                {filtered.length === 0 ? (
+                    <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-14 text-center">
+                        <div className="w-16 h-16 rounded-3xl bg-orange-50 flex items-center justify-center mx-auto mb-4">
+                            <FaPassport className="text-orange-300 text-4xl" />
                         </div>
-                        {!isLast && (
-                            <div className="flex-1 h-[2px] bg-gray-100 relative mt-4 min-w-[12px]">
-                                <motion.div className="h-full bg-orange-400" initial={{ width: 0 }} animate={{ width: i < currentStep ? "100%" : "0%" }} transition={{ duration: 0.5 }} />
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
+                            {statusFilter === "All" ? "No visa applications" : `No "${statusFilter}" applications`}
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                            {statusFilter === "All"
+                                ? "Visa applications will appear here."
+                                : "Try selecting a different status filter or search term."}
+                        </p>
+                    </div>
+                ) : (
+                    filtered.map(v => (
+                        <motion.div
+                            key={v.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.22 }}
+                            className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5 md:p-6 grid gap-4 md:grid-cols-[2.4fr_1fr_1fr_0.9fr] items-center"
+                        >
+                            <div className="flex items-start gap-4">
+                                <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-orange-600 text-2xl font-black shadow-sm">
+                                    {v.applicantName?.charAt(0).toUpperCase() || "A"}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-lg font-bold text-slate-900 truncate">{v.applicantName}</p>
+                                    <p className="text-sm text-slate-500 truncate">{v.email}</p>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 text-orange-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] border border-orange-100">
+                                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                            {v.country}
+                                        </span>
+                                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] border border-slate-200">
+                                            <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                            {v.visaType}
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                        )}
-                    </React.Fragment>
-                );
-            })}
+
+                            <div className="space-y-2">
+                                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Status</div>
+                                <StatusDropdown
+                                    id={v.id}
+                                    currentStatus={v.status}
+                                    collectionName="visaApplications"
+                                    onUpdate={(id, up) => updateLocal('visa', id, up)}
+                                    isVisa
+                                    applicant={v}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Edit control</div>
+                                <LiveActionPanel
+                                    item={v}
+                                    collectionName="visaApplications"
+                                    onLocalUpdate={(id, up) => updateLocal('visa', id, up)}
+                                />
+                            </div>
+
+                            <div className="flex flex-col items-end justify-between gap-3">
+                                <button
+                                    onClick={() => setSelectedDoc(v)}
+                                    className="inline-flex items-center justify-center w-12 h-12 rounded-3xl bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all shadow-sm"
+                                >
+                                    <MdVisibility className="text-xl" />
+                                </button>
+                                <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${
+                                    v.status === "Approved" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                                    v.status === "Rejected" ? "bg-red-50 text-red-600 border border-red-100" :
+                                    v.status === "Analyzing" ? "bg-amber-50 text-amber-700 border border-amber-100" :
+                                    "bg-sky-50 text-sky-700 border border-sky-100"
+                                }`}>
+                                    {v.status || "Doc Received"}
+                                </span>
+                            </div>
+                        </motion.div>
+                    ))
+                )}
+            </div>
         </div>
     );
 }

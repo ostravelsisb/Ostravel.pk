@@ -9,6 +9,7 @@ import {
 } from "react-icons/md";
 import { FaUserShield, FaGlobe } from "react-icons/fa";
 import { logSubAdminCreation, logSubAdminUpdate } from "../Utils/activityLogger";
+import { notify } from "./Toast";
 
 // List of Asian countries for assignment
 const ASIAN_COUNTRIES = [
@@ -104,7 +105,7 @@ export default function SubAdminManagement() {
             // Refresh list
             await fetchSubAdmins();
 
-            alert("✅ Sub-admin created successfully!");
+            notify.success("Sub-admin created successfully!");
         } catch (error) {
             console.error("Error creating sub-admin:", error);
             if (error.code === "auth/email-already-in-use") {
@@ -142,10 +143,10 @@ export default function SubAdminManagement() {
 
             await fetchSubAdmins();
             setEditingSubAdmin(null);
-            alert("✅ Countries updated successfully!");
+            notify.success("Countries updated successfully!");
         } catch (error) {
             console.error("Error updating countries:", error);
-            alert("❌ Failed to update countries");
+            notify.error("Failed to update countries");
         }
     };
 
@@ -171,10 +172,10 @@ export default function SubAdminManagement() {
             );
 
             await fetchSubAdmins();
-            alert(`✅ Sub-admin ${newStatus ? "activated" : "deactivated"} successfully!`);
+            notify.success(`Sub-admin ${newStatus ? "activated" : "deactivated"} successfully!`);
         } catch (error) {
             console.error("Error toggling active status:", error);
-            alert("❌ Failed to update status");
+            notify.error("Failed to update status");
         }
     };
 
@@ -249,145 +250,145 @@ export default function SubAdminManagement() {
                 </div>
             </div>
 
-            {/* Sub-Admins Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <table className="w-full">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                            <th className="text-left p-5 text-xs font-black text-slate-400 uppercase tracking-wider">Sub-Admin</th>
-                            <th className="text-left p-5 text-xs font-black text-slate-400 uppercase tracking-wider">Assigned Countries</th>
-                            <th className="text-left p-5 text-xs font-black text-slate-400 uppercase tracking-wider">Status</th>
-                            <th className="text-left p-5 text-xs font-black text-slate-400 uppercase tracking-wider">Created</th>
-                            <th className="text-left p-5 text-xs font-black text-slate-400 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {subAdmins.length === 0 ? (
-                            <tr>
-                                <td colSpan="5" className="p-12 text-center">
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-                                            <FaUserShield className="text-slate-400 text-2xl" />
-                                        </div>
-                                        <p className="text-slate-500 font-bold">No sub-admins yet</p>
-                                        <p className="text-sm text-slate-400">Create your first sub-admin to get started</p>
+            {/* Sub-Admins List */}
+            {subAdmins.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
+                            <FaUserShield className="text-slate-400 text-2xl" />
+                        </div>
+                        <p className="text-slate-500 font-bold">No sub-admins yet</p>
+                        <p className="text-sm text-slate-400">Create your first sub-admin to get started</p>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {subAdmins.map((subAdmin) => (
+                        <div
+                            key={subAdmin.id}
+                            className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all p-4 sm:p-5"
+                        >
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                {/* Identity */}
+                                <div className="flex items-center gap-3 sm:w-56 shrink-0">
+                                    <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-black shrink-0">
+                                        {subAdmin.displayName?.charAt(0).toUpperCase() || "S"}
                                     </div>
-                                </td>
-                            </tr>
-                        ) : (
-                            subAdmins.map((subAdmin) => (
-                                <tr key={subAdmin.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                                    <td className="p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-black">
-                                                {subAdmin.displayName?.charAt(0).toUpperCase() || "S"}
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-slate-800">{subAdmin.displayName}</p>
-                                                <p className="text-xs text-slate-500">{subAdmin.email}</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="p-5">
-                                        {editingSubAdmin === subAdmin.id ? (
-                                            <div className="flex flex-wrap gap-1 max-w-md">
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-slate-800 truncate">{subAdmin.displayName}</p>
+                                        <p className="text-xs text-slate-500 truncate">{subAdmin.email}</p>
+                                    </div>
+                                </div>
+
+                                {/* Countries */}
+                                <div className="flex-1 min-w-0">
+                                    {editingSubAdmin === subAdmin.id ? (
+                                        <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/60">
+                                            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                                                 {ASIAN_COUNTRIES.slice(0, 10).map(country => (
                                                     <button
                                                         key={country}
                                                         onClick={() => handleCountryToggle(country)}
-                                                        className={`text-xs px-2 py-1 rounded-full font-bold transition-all ${formData.assignedCountries.includes(country)
+                                                        className={`text-xs px-2.5 py-1 rounded-full font-bold transition-all ${formData.assignedCountries.includes(country)
                                                                 ? "bg-blue-600 text-white"
-                                                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                                                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
                                                             }`}
                                                     >
                                                         {country}
                                                     </button>
                                                 ))}
-                                                <p className="text-xs text-slate-400 w-full mt-1">+ {ASIAN_COUNTRIES.length - 10} more countries...</p>
                                             </div>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-1 max-w-md">
-                                                {subAdmin.assignedCountries?.slice(0, 3).map(country => (
-                                                    <span key={country} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-bold">
-                                                        {country}
-                                                    </span>
-                                                ))}
-                                                {subAdmin.assignedCountries?.length > 3 && (
-                                                    <span className="text-xs text-slate-500 font-bold">
-                                                        +{subAdmin.assignedCountries.length - 3} more
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className="p-5">
-                                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black ${subAdmin.isActive
-                                                ? "bg-emerald-50 text-emerald-700"
-                                                : "bg-red-50 text-red-700"
-                                            }`}>
-                                            {subAdmin.isActive ? <MdCheckCircle /> : <MdBlock />}
-                                            {subAdmin.isActive ? "Active" : "Inactive"}
-                                        </span>
-                                    </td>
-                                    <td className="p-5">
-                                        <p className="text-sm text-slate-600 font-bold">
-                                            {new Date(subAdmin.createdAt).toLocaleDateString()}
-                                        </p>
-                                    </td>
-                                    <td className="p-5">
-                                        <div className="flex items-center gap-2">
-                                            {editingSubAdmin === subAdmin.id ? (
+                                            <p className="text-xs text-slate-400 mt-2">+ {ASIAN_COUNTRIES.length - 10} more countries available</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <FaGlobe className="text-slate-300 text-xs shrink-0" />
+                                            {subAdmin.assignedCountries?.length > 0 ? (
                                                 <>
-                                                    <button
-                                                        onClick={() => handleUpdateCountries(subAdmin.id, formData.assignedCountries)}
-                                                        className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all"
-                                                        title="Save"
-                                                    >
-                                                        <MdSave className="text-lg" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingSubAdmin(null);
-                                                            setFormData({ ...formData, assignedCountries: [] });
-                                                        }}
-                                                        className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-all"
-                                                        title="Cancel"
-                                                    >
-                                                        <MdCancel className="text-lg" />
-                                                    </button>
+                                                    {subAdmin.assignedCountries.slice(0, 4).map(country => (
+                                                        <span key={country} className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-bold">
+                                                            {country}
+                                                        </span>
+                                                    ))}
+                                                    {subAdmin.assignedCountries.length > 4 && (
+                                                        <span className="text-xs text-slate-500 font-bold">
+                                                            +{subAdmin.assignedCountries.length - 4} more
+                                                        </span>
+                                                    )}
                                                 </>
                                             ) : (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingSubAdmin(subAdmin.id);
-                                                            setFormData({ ...formData, assignedCountries: subAdmin.assignedCountries || [] });
-                                                        }}
-                                                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
-                                                        title="Edit Countries"
-                                                    >
-                                                        <MdEdit className="text-lg" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleToggleActive(subAdmin.id, subAdmin.isActive)}
-                                                        className={`p-2 rounded-lg transition-all ${subAdmin.isActive
-                                                                ? "bg-red-50 text-red-600 hover:bg-red-600 hover:text-white"
-                                                                : "bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white"
-                                                            }`}
-                                                        title={subAdmin.isActive ? "Deactivate" : "Activate"}
-                                                    >
-                                                        {subAdmin.isActive ? <MdBlock className="text-lg" /> : <MdCheckCircle className="text-lg" />}
-                                                    </button>
-                                                </>
+                                                <span className="text-xs text-slate-400 font-medium">No countries assigned</span>
                                             )}
                                         </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                                    )}
+                                </div>
+
+                                {/* Status + created */}
+                                <div className="flex items-center gap-3 sm:w-44 shrink-0">
+                                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black ${subAdmin.isActive
+                                            ? "bg-emerald-50 text-emerald-700"
+                                            : "bg-red-50 text-red-700"
+                                        }`}>
+                                        {subAdmin.isActive ? <MdCheckCircle /> : <MdBlock />}
+                                        {subAdmin.isActive ? "Active" : "Inactive"}
+                                    </span>
+                                    <span className="text-xs text-slate-400 font-medium">
+                                        {new Date(subAdmin.createdAt).toLocaleDateString()}
+                                    </span>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-2 shrink-0 sm:justify-end">
+                                    {editingSubAdmin === subAdmin.id ? (
+                                        <>
+                                            <button
+                                                onClick={() => handleUpdateCountries(subAdmin.id, formData.assignedCountries)}
+                                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all"
+                                                title="Save"
+                                            >
+                                                <MdSave className="text-lg" />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingSubAdmin(null);
+                                                    setFormData({ ...formData, assignedCountries: [] });
+                                                }}
+                                                className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-all"
+                                                title="Cancel"
+                                            >
+                                                <MdCancel className="text-lg" />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingSubAdmin(subAdmin.id);
+                                                    setFormData({ ...formData, assignedCountries: subAdmin.assignedCountries || [] });
+                                                }}
+                                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
+                                                title="Edit Countries"
+                                            >
+                                                <MdEdit className="text-lg" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleToggleActive(subAdmin.id, subAdmin.isActive)}
+                                                className={`p-2 rounded-lg transition-all ${subAdmin.isActive
+                                                        ? "bg-red-50 text-red-600 hover:bg-red-600 hover:text-white"
+                                                        : "bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white"
+                                                    }`}
+                                                title={subAdmin.isActive ? "Deactivate" : "Activate"}
+                                            >
+                                                {subAdmin.isActive ? <MdBlock className="text-lg" /> : <MdCheckCircle className="text-lg" />}
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* Create Sub-Admin Modal */}
             <AnimatePresence>

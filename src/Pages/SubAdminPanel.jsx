@@ -21,7 +21,8 @@ import {
 import DocumentViewer from "../Components/DocumentViewer";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUtils";
-import { sendStatusChangeEmail, sendEditAccessEmail } from "../Utils/emailService";
+import { sendStatusChangeEmail, sendEditAccessEmail, sendAdminMessageEmail } from "../Utils/emailService";
+import ToastContainer, { notify } from "../Components/Toast";
 import { logStatusChange, logVisaEdit } from "../Utils/activityLogger";
 
 // --- MODERN COUNTRY DROPDOWN ---
@@ -223,7 +224,7 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
                     reason: msg,
                 });
             }
-        } catch (e) { alert("Toggle failed"); }
+        } catch (e) { notify.error("Toggle failed"); }
         setIsToggling(false);
     };
 
@@ -233,8 +234,17 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
         try {
             await saveAdminMessage(item.id, collectionName, msg);
             onLocalUpdate(item.id, { adminMessage: msg });
-            alert("Instruction sent to user dashboard");
-        } catch (e) { alert("Message failed"); }
+            if (collectionName === "visaApplications") {
+                sendAdminMessageEmail({
+                    to: item.email,
+                    applicantName: item.applicantName,
+                    applicationNumber: item.applicationNumber,
+                    country: item.country,
+                    message: msg,
+                });
+            }
+            notify.success(item.email ? "Message sent to dashboard & emailed to client" : "Message sent to dashboard");
+        } catch (e) { notify.error("Message failed"); }
         setIsSending(false);
     };
 
@@ -365,6 +375,10 @@ export default function SubAdminPanel() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
+    const [salesPeriod, setSalesPeriod] = useState("This Week");
+    const [overallPeriod, setOverallPeriod] = useState("Last 6 Months");
+    const [showSalesDropdown, setShowSalesDropdown] = useState(false);
+    const [showOverallDropdown, setShowOverallDropdown] = useState(false);
     const { currentUser, userData, userRole } = useAuth();
     const navigate = useNavigate();
 
@@ -435,15 +449,65 @@ export default function SubAdminPanel() {
         return totals;
     }, [visas]);
 
+    const salesChartData = useMemo(() => {
+        const now = new Date();
+        let cutoff = null;
+        let useMonthly = false;
+        if (salesPeriod === "This Week") {
+            const start = new Date(now); start.setDate(start.getDate() - start.getDay()); start.setHours(0,0,0,0);
+            cutoff = start;
+        } else if (salesPeriod === "Last Month") {
+            cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 1);
+        } else if (salesPeriod === "Last 3 Months") {
+            cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 3); useMonthly = true;
+        } else if (salesPeriod === "This Year") {
+            cutoff = new Date(now.getFullYear(), 0, 1); useMonthly = true;
+        }
+        if (useMonthly) {
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const totals = months.map(m => ({ day: m, applications: 0, approved: 0 }));
+            visas.forEach(v => {
+                const d = parseDate(v.applicationDate);
+                if (d && d >= cutoff) {
+                    totals[d.getMonth()].applications += 1;
+                    if (v.status === "Approved") totals[d.getMonth()].approved += 1;
+                }
+            });
+            if (salesPeriod === "This Year") return totals.slice(0, now.getMonth() + 1);
+            return totals;
+        } else {
+            const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+            const totals = days.map(d => ({ day: d, applications: 0, approved: 0 }));
+            visas.forEach(v => {
+                const d = parseDate(v.applicationDate);
+                if (d && (!cutoff || d >= cutoff)) {
+                    totals[d.getDay()].applications += 1;
+                    if (v.status === "Approved") totals[d.getDay()].approved += 1;
+                }
+            });
+            return totals;
+        }
+    }, [visas, salesPeriod]);
+
     const donutData = useMemo(() => {
-        const total = stats.total || 0;
+        const now = new Date();
+        let cutoff = null;
+        if (overallPeriod === "Last 3 Months") { cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 3); }
+        else if (overallPeriod === "Last 6 Months") { cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 6); }
+        else if (overallPeriod === "Last 12 Months") { cutoff = new Date(now); cutoff.setFullYear(cutoff.getFullYear() - 1); }
+        else if (overallPeriod === "This Year") { cutoff = new Date(now.getFullYear(), 0, 1); }
+        const filtered = cutoff ? visas.filter(v => { const d = parseDate(v.applicationDate); return d && d >= cutoff; }) : visas;
+        const approved = filtered.filter(v => v.status === "Approved").length;
+        const docReceived = filtered.filter(v => v.status === "Doc Received").length;
+        const analyzing = filtered.filter(v => v.status === "Analyzing").length;
+        const total = filtered.length || 0;
         return {
-            approved: stats.approved,
-            pending: stats.docReceived + stats.analyzing,
-            approvedPct: total ? Math.round((stats.approved / total) * 100) : 0,
-            pendingPct: total ? Math.round(((stats.docReceived + stats.analyzing) / total) * 100) : 0,
+            approved,
+            pending: docReceived + analyzing,
+            approvedPct: total ? Math.round((approved / total) * 100) : 0,
+            pendingPct: total ? Math.round(((docReceived + analyzing) / total) * 100) : 0,
         };
-    }, [stats]);
+    }, [visas, overallPeriod]);
 
     // Filtered visas
     const filteredVisas = useMemo(() => {
@@ -486,6 +550,7 @@ export default function SubAdminPanel() {
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
             `}</style>
+            <ToastContainer />
 
             {/* ===================== SIDEBAR ===================== */}
             <aside
@@ -973,12 +1038,29 @@ export default function SubAdminPanel() {
                                 {/* Bar Chart — Applications this week */}
                                 <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                                     <div className="flex items-center justify-between mb-5">
-                                        <h3 className="text-lg font-bold text-gray-800">Applications This Week</h3>
-                                        <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">By Day</span>
+                                        <h3 className="text-lg font-bold text-gray-800">Applications Overview</h3>
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => { setShowSalesDropdown(p => !p); setShowOverallDropdown(false); }}
+                                                className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                                            >
+                                                {salesPeriod} <MdKeyboardArrowDown className="text-base" />
+                                            </button>
+                                            {showSalesDropdown && (
+                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
+                                                    {["This Week", "Last Month", "Last 3 Months", "This Year"].map(opt => (
+                                                        <button key={opt} onClick={() => { setSalesPeriod(opt); setShowSalesDropdown(false); }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${salesPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
+                                                            {opt}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     <ResponsiveContainer width="100%" height={260}>
                                         <BarChart
-                                            data={weeklyOverview}
+                                            data={salesChartData}
                                             margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
                                             barGap={2}
                                             barCategoryGap="25%"
@@ -1021,8 +1103,26 @@ export default function SubAdminPanel() {
                                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
                                     <div className="flex items-center justify-between mb-2">
                                         <h3 className="text-lg font-bold text-gray-800">Status Overview</h3>
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => { setShowOverallDropdown(p => !p); setShowSalesDropdown(false); }}
+                                                className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                                            >
+                                                {overallPeriod} <MdKeyboardArrowDown className="text-base" />
+                                            </button>
+                                            {showOverallDropdown && (
+                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
+                                                    {["Last 3 Months", "Last 6 Months", "Last 12 Months", "This Year"].map(opt => (
+                                                        <button key={opt} onClick={() => { setOverallPeriod(opt); setShowOverallDropdown(false); }}
+                                                            className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${overallPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
+                                                            {opt}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <p className="text-sm font-semibold text-gray-400 mb-5">Your applications breakdown</p>
+                                    <p className="text-sm font-semibold text-gray-400 mb-5">Applications breakdown</p>
 
                                     <div className="flex items-center gap-4 mb-2">
                                         <div className="relative w-[140px] h-[140px] shrink-0">

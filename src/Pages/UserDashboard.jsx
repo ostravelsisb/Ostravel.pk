@@ -562,7 +562,7 @@ const UserDashboard = () => {
                                             <p className="text-amber-800 mt-2 leading-relaxed">{viewingVisa.adminMessage}</p>
                                             <p className="text-xs text-amber-600/70 mt-3 flex items-center gap-1">
                                                 <span className="w-1.5 h-1.5 bg-amber-600/70 rounded-full"></span>
-                                                Received: {viewingVisa.adminMessageAt ? new Date(viewingVisa.adminMessageAt.toDate()).toLocaleString() : 'Recently'}
+                                                Received: {viewingVisa.adminMessageAt ? (() => { const t = viewingVisa.adminMessageAt; try { return new Date(t?.toDate ? t.toDate() : t).toLocaleString(); } catch { return 'Recently'; } })() : 'Recently'}
                                             </p>
                                         </div>
                                     </div>

@@ -1,7 +1,7 @@
 import { useParams, Link, Navigate } from "react-router-dom";
 import { FaClock, FaUser, FaCalendarAlt } from "react-icons/fa";
 import SEO from "../Components/SEO";
-import { getPostBySlug, getRelatedPosts } from "../data/blogPosts";
+import { getPostBySlug, getRelatedPosts } from "../Data/blogPosts";
 
 function ContentBlock({ block, index }) {
   if (block.type === "h2") {

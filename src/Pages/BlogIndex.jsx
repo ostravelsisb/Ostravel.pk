@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { FaClock, FaUser } from "react-icons/fa";
 import SEO from "../Components/SEO";
-import { blogCategories, blogPosts } from "../data/blogPosts";
+import { blogCategories, blogPosts } from "../Data/blogPosts";
 
 export default function BlogIndex() {
   const [activeCategory, setActiveCategory] = useState("All");

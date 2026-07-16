@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
+import SEO from "../Components/SEO";
 // --- Icons (from react-icons) ---
 import {
   FaPassport,
@@ -145,76 +146,76 @@ const RegionSection = ({ icon, title, description, countries, bgColor = "bg-whit
 // --- Data Arrays for Countries ---
 // I've corrected all `to` links to match the keys in your `countryPages` object
 const dropboxCountries = [
-  { name: "Malaysia", code: "my", to: "/Countries/malaysia" },
-  { name: "Thailand", code: "th", to: "/Countries/thailand" },
-  { name: "Indonesia", code: "id", to: "/Countries/indonesia" },
-  { name: "Vietnam", code: "vn", to: "/Countries/vietnam" },
+  { name: "Malaysia", code: "my", to: "/visa/malaysia" },
+  { name: "Thailand", code: "th", to: "/visa/thailand" },
+  { name: "Indonesia", code: "id", to: "/visa/indonesia" },
+  { name: "Vietnam", code: "vn", to: "/visa/vietnam" },
 ];
 
 const schengenCountries = [
-  { name: "Austria", code: "at", to: "/Countries/austria" },
-  { name: "Belgium", code: "be", to: "/Countries/belgium" },
-  { name: "Bulgaria", code: "bg", to: "/Countries/bulgaria" },
-  { name: "Czech Republic", code: "cz", to: "/Countries/czechrepublic" },
-  { name: "Denmark", code: "dk", to: "/Countries/denmark" },
-  { name: "Estonia", code: "ee", to: "/Countries/estonia" },
-  { name: "Finland", code: "fi", to: "/Countries/finland" },
-  { name: "France", code: "fr", to: "/Countries/france" },
-  { name: "Germany", code: "de", to: "/Countries/germany" },
-  { name: "Greece", code: "gr", to: "/Countries/greece" },
-  { name: "Hungary", code: "hu", to: "/Countries/hungary" },
-  { name: "Italy", code: "it", to: "/Countries/italy" },
-  { name: "Lithuania", code: "lt", to: "/Countries/lithuania" },
-  { name: "Netherlands", code: "nl", to: "/Countries/netherlands" },
-  { name: "Norway", code: "no", to: "/Countries/norway" },
-  { name: "Poland", code: "pl", to: "/Countries/poland" },
-  { name: "Portugal", code: "pt", to: "/Countries/portugal" },
-  { name: "Romania", code: "ro", to: "/Countries/romania" },
-  { name: "Spain", code: "es", to: "/Countries/spain" },
-  { name: "Switzerland", code: "ch", to: "/Countries/switzerland" },
+  { name: "Austria", code: "at", to: "/visa/austria" },
+  { name: "Belgium", code: "be", to: "/visa/belgium" },
+  { name: "Bulgaria", code: "bg", to: "/visa/bulgaria" },
+  { name: "Czech Republic", code: "cz", to: "/visa/czechrepublic" },
+  { name: "Denmark", code: "dk", to: "/visa/denmark" },
+  { name: "Estonia", code: "ee", to: "/visa/estonia" },
+  { name: "Finland", code: "fi", to: "/visa/finland" },
+  { name: "France", code: "fr", to: "/visa/france" },
+  { name: "Germany", code: "de", to: "/visa/germany" },
+  { name: "Greece", code: "gr", to: "/visa/greece" },
+  { name: "Hungary", code: "hu", to: "/visa/hungary" },
+  { name: "Italy", code: "it", to: "/visa/italy" },
+  { name: "Lithuania", code: "lt", to: "/visa/lithuania" },
+  { name: "Netherlands", code: "nl", to: "/visa/netherlands" },
+  { name: "Norway", code: "no", to: "/visa/norway" },
+  { name: "Poland", code: "pl", to: "/visa/poland" },
+  { name: "Portugal", code: "pt", to: "/visa/portugal" },
+  { name: "Romania", code: "ro", to: "/visa/romania" },
+  { name: "Spain", code: "es", to: "/visa/spain" },
+  { name: "Switzerland", code: "ch", to: "/visa/switzerland" },
 ];
 
 const globalFileCountries = [
-  { name: "United Kingdom", code: "gb", to: "/Countries/united-kingdom" },
-  { name: "USA", code: "us", to: "/Countries/united-states" },
-  { name: "Canada", code: "ca", to: "/Countries/canada" },
-  { name: "Australia", code: "au", to: "/Countries/australia" },
-  { name: "Ireland", code: "ie", to: "/Countries/ireland" },
-  { name: "South Africa", code: "za", to: "/Countries/south-africa" },
+  { name: "United Kingdom", code: "gb", to: "/visa/united-kingdom" },
+  { name: "USA", code: "us", to: "/visa/united-states" },
+  { name: "Canada", code: "ca", to: "/visa/canada" },
+  { name: "Australia", code: "au", to: "/visa/australia" },
+  { name: "Ireland", code: "ie", to: "/visa/ireland" },
+  { name: "South Africa", code: "za", to: "/visa/south-africa" },
 ];
 
 const asiaMiddleEastCountries = [
-  { name: "Azerbaijan", code: "az", to: "/Countries/azerbaijan" },
-  { name: "Bahrain", code: "bh", to: "/Countries/bahrain" },
-  { name: "China", code: "cn", to: "/Countries/china" },
-  { name: "Japan", code: "jp", to: "/Countries/japan" },
-  { name: "Kazakhstan", code: "kz", to: "/Countries/kazakhstan" },
-  { name: "Philippines", code: "ph", to: "/Countries/philippines" },
-  { name: "Qatar", code: "qa", to: "/Countries/qatar" },
-  { name: "Singapore", code: "sg", to: "/Countries/singapore" },
-  { name: "South Korea", code: "kr", to: "/Countries/south-korea" },
-  { name: "Sri Lanka", code: "lk", to: "/Countries/sri-lanka" },
-  { name: "Tajikistan", code: "tj", to: "/Countries/tajikistan" },
-  { name: "Turkey", code: "tr", to: "/Countries/turkey" },
-  { name: "UAE", code: "ae", to: "/Countries/uae" },
-  { name: "Morocco", code: "ma", to: "/Countries/morocco" },
+  { name: "Azerbaijan", code: "az", to: "/visa/azerbaijan" },
+  { name: "Bahrain", code: "bh", to: "/visa/bahrain" },
+  { name: "China", code: "cn", to: "/visa/china" },
+  { name: "Japan", code: "jp", to: "/visa/japan" },
+  { name: "Kazakhstan", code: "kz", to: "/visa/kazakhstan" },
+  { name: "Philippines", code: "ph", to: "/visa/philippines" },
+  { name: "Qatar", code: "qa", to: "/visa/qatar" },
+  { name: "Singapore", code: "sg", to: "/visa/singapore" },
+  { name: "South Korea", code: "kr", to: "/visa/south-korea" },
+  { name: "Sri Lanka", code: "lk", to: "/visa/sri-lanka" },
+  { name: "Tajikistan", code: "tj", to: "/visa/tajikistan" },
+  { name: "Turkey", code: "tr", to: "/visa/turkey" },
+  { name: "UAE", code: "ae", to: "/visa/uae" },
+  { name: "Morocco", code: "ma", to: "/visa/morocco" },
 ];
 
 const africaCountries = [
-  { name: "Egypt", code: "eg", to: "/Countries/egypt" },
-  { name: "Ethiopia", code: "et", to: "/Countries/ethiopia" },
-  { name: "Kenya", code: "ke", to: "/Countries/kenya" },
-  { name: "Uganda", code: "ug", to: "/Countries/uganda" },
-  { name: "Zambia", code: "zm", to: "/Countries/zambia" },
+  { name: "Egypt", code: "eg", to: "/visa/egypt" },
+  { name: "Ethiopia", code: "et", to: "/visa/ethiopia" },
+  { name: "Kenya", code: "ke", to: "/visa/kenya" },
+  { name: "Uganda", code: "ug", to: "/visa/uganda" },
+  { name: "Zambia", code: "zm", to: "/visa/zambia" },
 ];
 
 const easyNavCountries = [
-  { name: "Maldives", code: "mv", to: "/Countries/maldives" },
-  { name: "Nepal", code: "np", to: "/Countries/nepal" },
+  { name: "Maldives", code: "mv", to: "/visa/maldives" },
+  { name: "Nepal", code: "np", to: "/visa/nepal" },
 ];
 
 const inboundTour = [
-  { name: "Visit Pakistan", code: "pk", to: "/Countries/pakistan" },
+  { name: "Visit Pakistan", code: "pk", to: "/visa/pakistan" },
 ];
 
 // --- Main Visas Page Component ---
@@ -224,6 +225,13 @@ function Visas() {
   },[])
   return (
     <div className="w-full bg-white overflow-x-hidden">
+      <SEO
+        title="Visa Services | UK, USA, Schengen, Canada & Asia E-Visas"
+        description="Expert visa assistance from OS Travels & Tours: UK, USA, Schengen, Canada, and Asia e-visa processing with documentation support, appointment booking and interview preparation."
+        keywords="visa services Islamabad, Schengen visa Pakistan, UK visa consultant, USA visa assistance, Canada visa Pakistan, Asia e-visa, student visa Pakistan, business visa Pakistan, tourist visa Pakistan"
+        path="/visas"
+        breadcrumbs={[{ name: "Home", url: "/" }, { name: "Visa Services" }]}
+      />
       {/* 1. Hero Section */}
       <motion.div
         variants={pageVariants}

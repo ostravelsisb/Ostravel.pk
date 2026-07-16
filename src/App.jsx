@@ -29,6 +29,10 @@ const HajandUmmrah = lazy(() => import('./Pages/HajandUmmrah'));
 const CountryPage = lazy(() => import('./Pages/Countrypage'));
 const Packages = lazy(() => import('./Pages/Packages'));
 const NotFound = lazy(() => import('./Pages/NotFound'));
+const Reviews = lazy(() => import('./Pages/Reviews'));
+const LegacyCountryRedirect = lazy(() => import('./Pages/LegacyCountryRedirect'));
+const BlogIndex = lazy(() => import('./Pages/BlogIndex'));
+const BlogPost = lazy(() => import('./Pages/BlogPost'));
 
 // --- Auth Pages ---
 const Login = lazy(() => import('./Authentication/Login'));
@@ -75,7 +79,11 @@ function App() {
               <Route path="/contact" element={<Contact />} />
               <Route path="/visas" element={<Visas />} />
               <Route path="/haj" element={<HajandUmmrah />} />
-              <Route path="/countries/:country" element={<CountryPage />} />
+              <Route path="/reviews" element={<Reviews />} />
+              <Route path="/blog" element={<BlogIndex />} />
+              <Route path="/blog/:slug" element={<BlogPost />} />
+              <Route path="/visa/:country" element={<CountryPage />} />
+              <Route path="/countries/:country" element={<LegacyCountryRedirect />} />
 
               {/* Auth Routes */}
               <Route path="/login" element={<Login />} />

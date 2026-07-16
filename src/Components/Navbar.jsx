@@ -20,6 +20,8 @@ const navItems = [
   { name: "File Process", to: "/fileprocessing", dropdownType: "fileProcess" },
   { name: "Contact", to: "/contact" },
   { name: "Haj and Ummrah", to: "/haj" },
+  { name: "Reviews", to: "/reviews" },
+  { name: "Blog", to: "/blog" },
 ];
 
 // --- Static Country Data (replaces restcountries.com API — was failing/blocked) ---
@@ -136,7 +138,7 @@ const VisaDropdown = () => {
           {currentList.map((country) => (
             <Link
               key={country.code}
-              to={`/Countries/${country.name.toLowerCase().replace(/\s+/g, "")}`}
+              to={`/visa/${country.name.toLowerCase().replace(/\s+/g, "")}`}
               className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100"
             >
               <img
@@ -169,7 +171,7 @@ const FileProcessDropdown = () => {
           {fileProcessCountryData.map((country) => (
             <Link
               key={country.code}
-              to={`/Countries/${country.name.toLowerCase().replace(/\s+/g, "-")}`}
+              to={`/visa/${country.name.toLowerCase().replace(/\s+/g, "-")}`}
               className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100"
             >
               <img

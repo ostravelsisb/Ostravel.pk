@@ -1,5 +1,275 @@
 {
+  "redirects": [
+    {
+      "source": "/countries/australia",
+      "destination": "/visa/australia",
+      "permanent": true
+    },
+    {
+      "source": "/countries/austria",
+      "destination": "/visa/austria",
+      "permanent": true
+    },
+    {
+      "source": "/countries/azerbaijan",
+      "destination": "/visa/azerbaijan",
+      "permanent": true
+    },
+    {
+      "source": "/countries/bahrain",
+      "destination": "/visa/bahrain",
+      "permanent": true
+    },
+    {
+      "source": "/countries/belgium",
+      "destination": "/visa/belgium",
+      "permanent": true
+    },
+    {
+      "source": "/countries/bulgaria",
+      "destination": "/visa/bulgaria",
+      "permanent": true
+    },
+    {
+      "source": "/countries/cambodia",
+      "destination": "/visa/cambodia",
+      "permanent": true
+    },
+    {
+      "source": "/countries/canada",
+      "destination": "/visa/canada",
+      "permanent": true
+    },
+    {
+      "source": "/countries/china",
+      "destination": "/visa/china",
+      "permanent": true
+    },
+    {
+      "source": "/countries/czechrepublic",
+      "destination": "/visa/czechrepublic",
+      "permanent": true
+    },
+    {
+      "source": "/countries/denmark",
+      "destination": "/visa/denmark",
+      "permanent": true
+    },
+    {
+      "source": "/countries/egypt",
+      "destination": "/visa/egypt",
+      "permanent": true
+    },
+    {
+      "source": "/countries/estonia",
+      "destination": "/visa/estonia",
+      "permanent": true
+    },
+    {
+      "source": "/countries/ethiopia",
+      "destination": "/visa/ethiopia",
+      "permanent": true
+    },
+    {
+      "source": "/countries/finland",
+      "destination": "/visa/finland",
+      "permanent": true
+    },
+    {
+      "source": "/countries/france",
+      "destination": "/visa/france",
+      "permanent": true
+    },
+    {
+      "source": "/countries/germany",
+      "destination": "/visa/germany",
+      "permanent": true
+    },
+    {
+      "source": "/countries/greece",
+      "destination": "/visa/greece",
+      "permanent": true
+    },
+    {
+      "source": "/countries/hungary",
+      "destination": "/visa/hungary",
+      "permanent": true
+    },
+    {
+      "source": "/countries/indonesia",
+      "destination": "/visa/indonesia",
+      "permanent": true
+    },
+    {
+      "source": "/countries/ireland",
+      "destination": "/visa/ireland",
+      "permanent": true
+    },
+    {
+      "source": "/countries/italy",
+      "destination": "/visa/italy",
+      "permanent": true
+    },
+    {
+      "source": "/countries/japan",
+      "destination": "/visa/japan",
+      "permanent": true
+    },
+    {
+      "source": "/countries/kazakhstan",
+      "destination": "/visa/kazakhstan",
+      "permanent": true
+    },
+    {
+      "source": "/countries/kenya",
+      "destination": "/visa/kenya",
+      "permanent": true
+    },
+    {
+      "source": "/countries/lithuania",
+      "destination": "/visa/lithuania",
+      "permanent": true
+    },
+    {
+      "source": "/countries/malaysia",
+      "destination": "/visa/malaysia",
+      "permanent": true
+    },
+    {
+      "source": "/countries/maldives",
+      "destination": "/visa/maldives",
+      "permanent": true
+    },
+    {
+      "source": "/countries/morocco",
+      "destination": "/visa/morocco",
+      "permanent": true
+    },
+    {
+      "source": "/countries/nepal",
+      "destination": "/visa/nepal",
+      "permanent": true
+    },
+    {
+      "source": "/countries/netherlands",
+      "destination": "/visa/netherlands",
+      "permanent": true
+    },
+    {
+      "source": "/countries/norway",
+      "destination": "/visa/norway",
+      "permanent": true
+    },
+    {
+      "source": "/countries/pakistan",
+      "destination": "/visa/pakistan",
+      "permanent": true
+    },
+    {
+      "source": "/countries/philippines",
+      "destination": "/visa/philippines",
+      "permanent": true
+    },
+    {
+      "source": "/countries/poland",
+      "destination": "/visa/poland",
+      "permanent": true
+    },
+    {
+      "source": "/countries/portugal",
+      "destination": "/visa/portugal",
+      "permanent": true
+    },
+    {
+      "source": "/countries/qatar",
+      "destination": "/visa/qatar",
+      "permanent": true
+    },
+    {
+      "source": "/countries/romania",
+      "destination": "/visa/romania",
+      "permanent": true
+    },
+    {
+      "source": "/countries/singapore",
+      "destination": "/visa/singapore",
+      "permanent": true
+    },
+    {
+      "source": "/countries/south-africa",
+      "destination": "/visa/south-africa",
+      "permanent": true
+    },
+    {
+      "source": "/countries/south-korea",
+      "destination": "/visa/south-korea",
+      "permanent": true
+    },
+    {
+      "source": "/countries/spain",
+      "destination": "/visa/spain",
+      "permanent": true
+    },
+    {
+      "source": "/countries/sri-lanka",
+      "destination": "/visa/sri-lanka",
+      "permanent": true
+    },
+    {
+      "source": "/countries/switzerland",
+      "destination": "/visa/switzerland",
+      "permanent": true
+    },
+    {
+      "source": "/countries/tajikistan",
+      "destination": "/visa/tajikistan",
+      "permanent": true
+    },
+    {
+      "source": "/countries/thailand",
+      "destination": "/visa/thailand",
+      "permanent": true
+    },
+    {
+      "source": "/countries/turkey",
+      "destination": "/visa/turkey",
+      "permanent": true
+    },
+    {
+      "source": "/countries/uae",
+      "destination": "/visa/uae",
+      "permanent": true
+    },
+    {
+      "source": "/countries/uganda",
+      "destination": "/visa/uganda",
+      "permanent": true
+    },
+    {
+      "source": "/countries/united-kingdom",
+      "destination": "/visa/united-kingdom",
+      "permanent": true
+    },
+    {
+      "source": "/countries/united-states",
+      "destination": "/visa/united-states",
+      "permanent": true
+    },
+    {
+      "source": "/countries/vietnam",
+      "destination": "/visa/vietnam",
+      "permanent": true
+    },
+    {
+      "source": "/countries/zambia",
+      "destination": "/visa/zambia",
+      "permanent": true
+    }
+  ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

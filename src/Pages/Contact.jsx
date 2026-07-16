@@ -9,6 +9,7 @@ import {
 } from "react-icons/md";
 import { db } from "../firbase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import SEO from "../Components/SEO";
 // --- Animation Variants ---
 const sectionVariant = {
   hidden: { opacity: 0, y: 50 },
@@ -105,6 +106,13 @@ function Contact() {
 
   return (
     <div className="w-full bg-gray-50 overflow-x-hidden">
+      <SEO
+        title="Contact Us | Islamabad Office, Blue Area"
+        description="Get in touch with OS Travels & Tours in Blue Area, Islamabad for visa consultancy, flight booking, Umrah packages and holiday tour inquiries. Call 051-2120700 or email info@ostravels.com."
+        keywords="contact OS Travels, travel agency Blue Area Islamabad, visa consultant contact number, travel agency phone number Islamabad"
+        path="/contact"
+        breadcrumbs={[{ name: "Home", url: "/" }, { name: "Contact" }]}
+      />
       {/* 1. Hero Section */}
       <div className="relative w-full h-64 md:h-72 bg-blue-500">
         <img

@@ -8,6 +8,7 @@ import {
 } from 'react-icons/fa';
 import { IoDocumentTextOutline, IoCalendarOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
 import { Link } from 'react-router-dom';
+import SEO from '../Components/SEO';
 
 // --- ANIMATION VARIANTS ---
 const containerVariants = {
@@ -103,7 +104,13 @@ export default function PrivacyPolicyPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-            
+            <SEO
+                title="Privacy Policy"
+                description="Read the OS Travels & Tours privacy policy covering data collection, usage, cookies and refund/cancellation terms for our travel, visa and Umrah services."
+                keywords="OS Travels privacy policy, travel agency terms Pakistan"
+                path="/privacy-policy"
+                breadcrumbs={[{ name: "Home", url: "/" }, { name: "Privacy Policy" }]}
+            />
             {/* --- HERO SECTION --- */}
             {/* styled to look like a premium corporate header */}
             <div className="relative bg-blue-900 text-white pt-24 pb-32 px-4 overflow-hidden">

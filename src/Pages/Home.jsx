@@ -9,6 +9,7 @@ import Hotelform from "../SildeComponents/Hotelform";
 import InsurenceForm from "../SildeComponents/InsurenceForm";
 import Seopage from "../SildeComponents/Seopage";
 import FAQSection from "../SildeComponents/FAQSection"
+import SEO from "../Components/SEO";
 
 // --- Icons ---
 import {
@@ -80,10 +81,10 @@ const mainNavItems = [
 
 // --- Data for Dropbox Countries ---
 const dropboxCountries = [
-  { name: "Malaysia", code: "my", to: "/Countries/malaysia" },
-  { name: "Thailand", code: "th", to: "/Countries/thailand" },
-  { name: "Indonesia", code: "id", to: "/Countries/indonesia" },
-  { name: "Vietnam", code: "vn", to: "/Countries/vietnam" },
+  { name: "Malaysia", code: "my", to: "/visa/malaysia" },
+  { name: "Thailand", code: "th", to: "/visa/thailand" },
+  { name: "Indonesia", code: "id", to: "/visa/indonesia" },
+  { name: "Vietnam", code: "vn", to: "/visa/vietnam" },
 ];
 
 // --- MAIN HOME COMPONENT ---
@@ -146,6 +147,22 @@ function Home() {
 
   return (
     <>
+      <SEO
+        title="Best Travel Agency in Islamabad | Flights, Visas, Umrah & Hotels"
+        description="OS Travels & Tours is Islamabad's trusted travel agency offering cheap flight booking, visa assistance, Umrah & Hajj packages, hotel reservations and custom tour packages across Pakistan."
+        keywords={[
+          "OS Travels Islamabad",
+          "best travel agency in Pakistan",
+          "cheap flights Islamabad",
+          "visa consultant Blue Area Islamabad",
+          "Umrah packages 2025",
+          "Hajj packages Pakistan",
+          "flight booking online Pakistan",
+          "hotel reservation Pakistan",
+          "tour packages Pakistan",
+        ]}
+        path="/"
+      />
       <AnimatePresence mode="wait">
         {/* --- 1. INTRO SPLASH SCREEN --- */}
         {isLoading ? (

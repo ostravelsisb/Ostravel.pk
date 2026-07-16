@@ -41,15 +41,20 @@ function Footer() {
     { name: "Home", to: "/" },
     { name: "About Us", to: "/about" },
     { name: "Visa Services", to: "/visas" }, // Updated text for clarity
+    { name: "Umrah & Hajj Packages", to: "/haj" },
+    { name: "Tour Packages", to: "/packages" },
+    { name: "Reviews", to: "/reviews" },
+    { name: "Blog", to: "/blog" },
     { name: "File Processing", to: "/fileprocessing" }, // Updated text
     { name: "Contact", to: "/contact" },
   ];
 
   const servicesLinks = [
-    { name: "Schengen Visa", to: "/fileprocessing" },
-    { name: "USA/UK Visa", to: "/fileprocessing" },
+    { name: "Schengen Visa Consultancy", to: "/fileprocessing" },
+    { name: "USA/UK Visa Assistance", to: "/fileprocessing" },
     { name: "Asia E-Visas", to: "/visas" },
-    { name: "Flight Tickets", to: "/" }, // Assuming these link to relevant pages
+    { name: "Umrah Packages 2025", to: "/haj" },
+    { name: "Flight Tickets Booking", to: "/" },
     { name: "Hotel Bookings", to: "/" },
   ];
 
@@ -165,6 +170,24 @@ function Footer() {
               </li>
             </ul>
           </motion.div>
+        </div>
+      </div>
+
+      {/* SEO Keyword Block: helps search engines understand site scope on every page */}
+      <div className="border-t border-gray-800 bg-gray-900">
+        <div className="max-w-7xl mx-auto px-6 py-8 text-xs leading-relaxed text-gray-500">
+          <p className="mb-2">
+            <strong className="text-gray-400">OS Travels & Tours</strong> — Best travel agency in Islamabad, Pakistan,
+            offering visa consultancy, cheap flight booking, hotel reservations, Umrah & Hajj packages 2025, corporate
+            travel management and customized tour packages.
+          </p>
+          <p>
+            Popular searches: Islamabad visa consultant &middot; Schengen visa Pakistan &middot; UK visa assistance &middot;
+            USA visa consultant &middot; Canada visa Pakistan &middot; Dubai visa online &middot; Turkey visa Pakistan &middot;
+            Malaysia visa &middot; cheap flights from Islamabad &middot; Umrah packages from Islamabad &middot; Hajj packages
+            Pakistan &middot; hotel booking Makkah Madinah &middot; tour packages Pakistan &middot; travel insurance Pakistan &middot;
+            corporate travel management Pakistan.
+          </p>
         </div>
       </div>
 

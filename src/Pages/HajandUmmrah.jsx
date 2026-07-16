@@ -9,6 +9,7 @@ import {
 // --- Components & Context ---
 import UmrahBookingForm from '../SildeComponents/UmrahBookingForm';
 import { useCurrency } from '../Context/CurrencyContext';
+import SEO from '../Components/SEO';
 
 // --- Master Data (All Packages) ---
 const allPackages = [
@@ -225,6 +226,13 @@ function HajandUmmrah() {
 
   return (
     <div className="w-full bg-slate-50 overflow-x-hidden font-sans">
+      <SEO
+        title="Umrah & Hajj Packages 2025 | Economy to VIP Packages"
+        description="Book affordable Umrah and Hajj packages 2025 with OS Travels & Tours: flights, visa processing, Makkah & Madinah hotels near Haram, Ziarat tours and transport included."
+        keywords="Umrah packages 2025, Hajj packages Pakistan, cheap Umrah packages, Umrah packages from Islamabad, Makkah Madinah hotel packages, VIP Umrah package, economy Umrah package, Hajj visa Pakistan"
+        path="/haj"
+        breadcrumbs={[{ name: "Home", url: "/" }, { name: "Umrah & Hajj Packages" }]}
+      />
 
       {/* 1. Premium Hero Section */}
       <motion.div

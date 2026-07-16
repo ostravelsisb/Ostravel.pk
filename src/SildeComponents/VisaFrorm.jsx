@@ -91,7 +91,7 @@ function VisaForm() {
   // --- Handle Submit / Navigation ---
   const handleSubmit = () => {
     if (selectedDestination) {
-      navigate(`/Countries/${selectedDestination.toLowerCase().replace(/\s+/g, "")}`);
+      navigate(`/visa/${selectedDestination.toLowerCase().replace(/\s+/g, "")}`);
     } else {
       alert("Please select a destination country first.");
     }

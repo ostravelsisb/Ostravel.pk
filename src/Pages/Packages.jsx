@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCurrency } from "../Context/CurrencyContext"; // Added
+import SEO from "../Components/SEO";
 
 // Icons
 import { FaPlane, FaShieldAlt, FaSuitcase, FaChevronDown, FaFilePdf, FaCheck, FaTimes, FaRegCreditCard, FaArrowRight, FaGlobeAmericas, FaPassport } from "react-icons/fa";
@@ -89,6 +90,13 @@ const Packages = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-sans text-slate-800 relative">
+      <SEO
+        title="Tour & Travel Packages | Compare & Book Online"
+        description="Browse and compare OS Travels & Tours packages: flights, hotels and travel insurance bundled into affordable tour packages for destinations worldwide."
+        keywords="travel packages Pakistan, tour packages online, holiday packages Pakistan, flight and hotel packages, travel insurance packages"
+        path="/packages"
+        breadcrumbs={[{ name: "Home", url: "/" }, { name: "Packages" }]}
+      />
 
       {/* --- CONFIRMATION MODAL --- */}
       <AnimatePresence>

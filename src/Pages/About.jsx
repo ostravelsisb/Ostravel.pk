@@ -2,6 +2,7 @@ import React, { useState } from "react"; // Added useState
 // Import Framer Motion
 import { motion, AnimatePresence } from "framer-motion"; // Added AnimatePresence
 import { useEffect } from "react";
+import SEO from "../Components/SEO";
 
 
 
@@ -257,6 +258,13 @@ function About() {
 
   return (
     <div className="w-full bg-white overflow-x-hidden">
+      <SEO
+        title="About Us | Trusted Travel Agency in Islamabad Since Years"
+        description="Learn about OS Travels & Tours, a trusted Islamabad-based travel agency specializing in visa consultancy, Umrah & Hajj packages, flight booking and holiday tours across Pakistan."
+        keywords="about OS Travels, travel agency Islamabad history, visa consultancy company Pakistan, trusted travel partner Pakistan"
+        path="/about"
+        breadcrumbs={[{ name: "Home", url: "/" }, { name: "About Us" }]}
+      />
       {/* 1. Hero Section */}
       <div className="relative w-full h-64 md:h-80 bg-blue-600">
         <img

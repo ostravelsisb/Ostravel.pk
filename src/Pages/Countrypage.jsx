@@ -1,6 +1,7 @@
 import { useParams ,Link} from "react-router-dom";
 import { motion } from 'framer-motion';
 import { FaGlobeAmericas, FaSearchMinus } from 'react-icons/fa';
+import SEO from "../Components/SEO";
 // import all country components here
 import Australia from "../Countries/Australia";
 import Austria from "../Countries/Austria";
@@ -141,6 +142,9 @@ export default function CountryPage() {
     visible: { opacity: 1, y: 0 }
   };
 
+  const displayName = country.replace(/%20/g, " ").replace(/-/g, " ");
+  const titledName = displayName.replace(/\b\w/g, (c) => c.toUpperCase());
+
   if (!PageComponent) {
     return (
       <motion.div
@@ -149,6 +153,13 @@ export default function CountryPage() {
         initial="hidden"
         animate="visible"
       >
+        <SEO
+          title={`${titledName} Visa Not Found`}
+          description={`We couldn't find a visa page for ${displayName}. Browse OS Travels & Tours' full list of visa services for other destinations.`}
+          path={`/visa/${country}`}
+          breadcrumbs={[{ name: "Home", url: "/" }, { name: "Visa Services", url: "/visas" }, { name: titledName }]}
+          noindex
+        />
         <motion.div variants={itemVariants} className="text-blue-500 text-6xl mb-4">
           <FaSearchMinus /> {/* "Not Found" icon */}
         </motion.div>
@@ -185,5 +196,16 @@ export default function CountryPage() {
     );
   }
 
-  return <PageComponent />;
+  return (
+    <>
+      <SEO
+        title={`${titledName} Visa Requirements & Application Guide`}
+        description={`Complete guide to ${titledName} visa requirements, documents, fees and processing time. OS Travels & Tours offers expert visa assistance and consultancy for ${titledName} from Pakistan.`}
+        keywords={`${titledName} visa, ${titledName} visa from Pakistan, ${titledName} visa requirements, ${titledName} visa consultant Islamabad, ${titledName} tourist visa, ${titledName} visa application`}
+        path={`/visa/${country}`}
+        breadcrumbs={[{ name: "Home", url: "/" }, { name: "Visa Services", url: "/visas" }, { name: titledName }]}
+      />
+      <PageComponent />
+    </>
+  );
 }

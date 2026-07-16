@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+
+# Block crawling of query-string URLs (filters, session params)
+Disallow: /*?*
+
+# Private / non-indexable app routes
+Disallow: /admin
+Disallow: /subadmin
+Disallow: /dashboard
+Disallow: /login
+Disallow: /signup
+Disallow: /purchase
+Disallow: /paypage
+Disallow: /payment-return
+Disallow: /apply-visa
+Disallow: /visa-payment
+Disallow: /visa-confirmation
+Disallow: /bookingconfirmation
+
+Sitemap: https://www.ostravels.com/sitemap.xml

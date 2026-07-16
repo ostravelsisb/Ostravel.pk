@@ -66,7 +66,12 @@ function VisaForm() {
   const [selectedDestination, setSelectedDestination] = useState("");
   const [destinationFlag, setDestinationFlag] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
   const dropdownRef = useRef(null);
+
+  const filteredCountryList = countryList.filter((country) =>
+    country.name.toLowerCase().includes(countrySearch.toLowerCase())
+  );
 
   const navigate = useNavigate();
 
@@ -86,6 +91,7 @@ function VisaForm() {
     setSelectedDestination(country.name);
     setDestinationFlag(`https://flagcdn.com/w40/${country.code}.png`);
     setIsOpen(false);
+    setCountrySearch("");
   };
 
   // --- Handle Submit / Navigation ---
@@ -162,23 +168,40 @@ function VisaForm() {
 
             {/* --- Custom Dropdown List (with flags) --- */}
             {isOpen && (
-              <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-lg">
-                {countryList.map((country) => (
-                  <button
-                    type="button"
-                    key={country.code}
-                    onClick={() => handleCountrySelect(country)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors ${selectedDestination === country.name ? "bg-blue-100 font-semibold" : ""
-                      }`}
-                  >
-                    <img
-                      src={`https://flagcdn.com/w40/${country.code}.png`}
-                      alt={country.name}
-                      className="w-6 h-4 object-cover rounded-sm border border-gray-200 flex-shrink-0"
-                    />
-                    <span className="text-sm text-gray-800">{country.name}</span>
-                  </button>
-                ))}
+              <div className="absolute z-50 mt-1 w-full max-h-72 overflow-hidden flex flex-col bg-white border border-gray-300 rounded-lg shadow-lg">
+                <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={countrySearch}
+                    onChange={(e) => setCountrySearch(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Search country..."
+                    className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="overflow-y-auto">
+                  {filteredCountryList.length > 0 ? (
+                    filteredCountryList.map((country) => (
+                      <button
+                        type="button"
+                        key={country.code}
+                        onClick={() => handleCountrySelect(country)}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors ${selectedDestination === country.name ? "bg-blue-100 font-semibold" : ""
+                          }`}
+                      >
+                        <img
+                          src={`https://flagcdn.com/w40/${country.code}.png`}
+                          alt={country.name}
+                          className="w-6 h-4 object-cover rounded-sm border border-gray-200 flex-shrink-0"
+                        />
+                        <span className="text-sm text-gray-800">{country.name}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-4 py-3 text-sm text-gray-400">No country found</p>
+                  )}
+                </div>
               </div>
             )}
           </div>

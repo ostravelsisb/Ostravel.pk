@@ -823,14 +823,23 @@ const UserDashboard = () => {
                                             ].map(doc => {
                                                 const isVerified = editingVisa.documentVerification?.[doc.key];
                                                 const hasDocument = editingVisa.documentURLs?.[doc.key];
+                                                // Per-doc edit permission: if editApprovedDocs map exists, use it; otherwise fall back to global editApproved
+                                                const editApprovedDocs = editingVisa.editApprovedDocs || {};
+                                                const hasPerDocMap = Object.keys(editApprovedDocs).length > 0;
+                                                const canEditThisDoc = isVerified ? false : (hasPerDocMap ? !!editApprovedDocs[doc.key] : true);
 
                                                 return (
-                                                    <div key={doc.key} className={`rounded-lg border p-4 transition-all ${isVerified ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-slate-200'}`}>
+                                                    <div key={doc.key} className={`rounded-lg border p-4 transition-all ${isVerified ? 'bg-emerald-50 border-emerald-300' : canEditThisDoc ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200 opacity-70'}`}>
                                                         <div className="flex items-center justify-between mb-2">
                                                             <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">{doc.label}</label>
                                                             {isVerified && (
                                                                 <span className="bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
                                                                     ✓ Verified
+                                                                </span>
+                                                            )}
+                                                            {!isVerified && !canEditThisDoc && (
+                                                                <span className="bg-slate-200 text-slate-500 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                                                                    🔒 Locked
                                                                 </span>
                                                             )}
                                                         </div>
@@ -839,6 +848,11 @@ const UserDashboard = () => {
                                                             <div className="flex items-center gap-2 text-sm text-emerald-700">
                                                                 <HiDocument className="w-4 h-4" />
                                                                 <span className="font-medium">Document verified by admin</span>
+                                                            </div>
+                                                        ) : !canEditThisDoc ? (
+                                                            <div className="flex items-center gap-2 text-sm text-slate-400">
+                                                                <HiDocument className="w-4 h-4" />
+                                                                <span className="font-medium">{hasDocument ? 'Upload locked by admin' : 'Not uploaded — locked'}</span>
                                                             </div>
                                                         ) : (
                                                             <>

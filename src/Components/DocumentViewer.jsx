@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { MdClose, MdZoomIn, MdZoomOut, MdRefresh, MdDownload, MdCheckCircle, MdErrorOutline, MdDelete, MdWarning } from 'react-icons/md';
+import { MdClose, MdZoomIn, MdZoomOut, MdRefresh, MdDownload, MdCheckCircle, MdErrorOutline, MdDelete, MdWarning, MdLockOpen, MdLockOutline } from 'react-icons/md';
 import { FaPassport } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ref, listAll, getDownloadURL, deleteObject } from "firebase/storage";
@@ -22,6 +22,27 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
     
     // Refresh trigger for document list
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [editApprovedDocs, setEditApprovedDocs] = useState(visa.editApprovedDocs || {});
+    const [togglingDoc, setTogglingDoc] = useState(null);
+
+    const handleToggleDocEdit = async (docKey) => {
+        const newVal = !editApprovedDocs[docKey];
+        setTogglingDoc(docKey);
+        try {
+            const newEditApprovedDocs = { ...editApprovedDocs, [docKey]: newVal };
+            await updateDoc(doc(db, "visaApplications", visa.id), {
+                editApprovedDocs: newEditApprovedDocs,
+                updatedAt: serverTimestamp()
+            });
+            setEditApprovedDocs(newEditApprovedDocs);
+            if (onStage) {
+                onStage({ editApprovedDocs: newEditApprovedDocs });
+            }
+        } catch (e) {
+            notify.error("Toggle failed");
+        }
+        setTogglingDoc(null);
+    };
 
     useEffect(() => {
         const fetchStorageDocs = async () => {
@@ -71,9 +92,10 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
         { key: 'nicScan', label: 'NIC Scan', icon: '📇' },
         { key: 'bForm', label: 'B-Form', icon: '📄' },
         { key: 'frc', label: 'FRC', icon: '📋' },
-    ].filter(doc => activeURLs[doc.key]);
+    ]; // show all required doc fields always
 
-    const verifiedCount = docCategories.filter(d => verifiedDocs[d.key]).length;
+    const uploadedDocCategories = docCategories.filter(doc => activeURLs && activeURLs[doc.key]);
+    const verifiedCount = uploadedDocCategories.filter(d => verifiedDocs[d.key]).length;
 
     const handleVerifyDocument = (docKey) => {
         const isNowVerified = !verifiedDocs[docKey];
@@ -330,10 +352,6 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                     <div className="w-8 h-8 border-2 border-amber-300 border-t-amber-500 rounded-full animate-spin"></div>
                                     <p className="text-sm text-slate-600 font-medium">Loading documents...</p>
                                 </div>
-                            ) : docCategories.length === 0 ? (
-                                <div className="p-5 bg-red-100 border border-red-300 text-red-700 rounded-xl flex items-center gap-3 text-sm font-semibold">
-                                    <MdErrorOutline className="text-xl flex-shrink-0" /> No documents found
-                                </div>
                             ) : (
                                 <motion.div
                                     className="space-y-2"
@@ -344,29 +362,38 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                     {docCategories.map((docItem) => {
                                         const isSelected = selectedDoc?.key === docItem.key;
                                         const isVerified = verifiedDocs[docItem.key];
+                                        const isUploaded = !!(activeURLs && activeURLs[docItem.key]);
+                                        const isDocEditEnabled = !!editApprovedDocs[docItem.key];
+                                        const isTogglingThis = togglingDoc === docItem.key;
 
                                         return (
                                             <motion.div
                                                 key={docItem.key}
                                                 variants={{ hidden: { opacity: 0, x: -12 }, show: { opacity: 1, x: 0 } }}
                                                 className={`rounded-xl transition-all duration-200 overflow-hidden ${
-                                                    isSelected
+                                                    isSelected && isUploaded
                                                         ? 'bg-amber-50 border border-amber-300 shadow-lg shadow-amber-200'
+                                                        : !isUploaded
+                                                        ? 'bg-slate-50 border border-dashed border-slate-300 opacity-80'
                                                         : 'bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                                                 }`}
                                             >
                                                 <div
-                                                    onClick={() => setSelectedDoc(docItem)}
-                                                    className="px-4 py-3.5 cursor-pointer"
+                                                    onClick={() => isUploaded && setSelectedDoc(docItem)}
+                                                    className={`px-4 py-3.5 ${isUploaded ? 'cursor-pointer' : 'cursor-default'}`}
                                                 >
                                                     <div className="flex justify-between items-center">
                                                         <div className="flex items-center gap-3">
                                                             <span className="text-lg">{docItem.icon}</span>
-                                                            <span className={`text-[15px] font-semibold ${isSelected ? 'text-amber-900' : 'text-slate-700'}`}>
+                                                            <span className={`text-[15px] font-semibold ${isSelected && isUploaded ? 'text-amber-900' : !isUploaded ? 'text-slate-400' : 'text-slate-700'}`}>
                                                                 {docItem.label}
                                                             </span>
                                                         </div>
-                                                        {isVerified ? (
+                                                        {!isUploaded ? (
+                                                            <div className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Not Uploaded</span>
+                                                            </div>
+                                                        ) : isVerified ? (
                                                             <div className="flex items-center gap-1.5 bg-emerald-100 px-2.5 py-1 rounded-full">
                                                                 <MdCheckCircle className="text-emerald-600 text-sm" />
                                                                 <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Verified</span>
@@ -377,7 +404,31 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                                     </div>
                                                 </div>
 
-                                                {/* Action Buttons */}
+                                                {/* Per-doc Edit Toggle */}
+                                                <div className="px-4 pb-2">
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.01 }}
+                                                        whileTap={{ scale: 0.99 }}
+                                                        onClick={(e) => { e.stopPropagation(); handleToggleDocEdit(docItem.key); }}
+                                                        disabled={isTogglingThis}
+                                                        className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-200 ${
+                                                            isDocEditEnabled
+                                                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 hover:bg-emerald-200'
+                                                                : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                                                        } ${isTogglingThis ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    >
+                                                        {isTogglingThis ? (
+                                                            <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                        ) : isDocEditEnabled ? (
+                                                            <><MdLockOpen className="text-sm" /> EDIT ENABLED</>
+                                                        ) : (
+                                                            <><MdLockOutline className="text-sm" /> EDIT LOCKED</>
+                                                        )}
+                                                    </motion.button>
+                                                </div>
+
+                                                {/* Action Buttons — only for uploaded docs */}
+                                                {isUploaded && (
                                                 <div className="px-4 pb-3 flex gap-1.5">
                                                     <motion.button
                                                         whileHover={{ scale: 1.03 }}
@@ -412,6 +463,7 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                                         {deleting === docItem.key ? '...' : <MdDelete className="text-sm" />}
                                                     </motion.button>
                                                 </div>
+                                                )}
                                             </motion.div>
                                         );
                                     })}

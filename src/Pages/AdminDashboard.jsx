@@ -223,20 +223,9 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, onStage }) => {
 
     return (
         <div className="flex flex-col gap-2 min-w-[220px]">
-            <div className="flex items-center justify-between bg-slate-50 p-1 rounded-lg border border-slate-200">
-                <button
-                    onClick={handleToggle}
-                    disabled={isToggling}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-bold transition-all ${item.editApproved ? "bg-emerald-500 text-white shadow-md" : "bg-slate-200 text-slate-500"} ${isToggling ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                    {isToggling ? <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
-                        : (item.editApproved ? <MdLockOpen className="text-base" /> : <MdLockOutline className="text-base" />)}
-                    {isToggling ? "UPDATING..." : (item.editApproved ? "EDIT ENABLED" : "EDIT LOCKED")}
-                </button>
-                {item.userConfirmed && (
-                    <span className="text-[11px] font-bold text-blue-600 animate-bounce pr-2">RE-SUBMITTED</span>
-                )}
-            </div>
+            {item.userConfirmed && (
+                <span className="text-[11px] font-bold text-blue-600 animate-bounce">RE-SUBMITTED</span>
+            )}
             <div className="relative">
                 <input
                     type="text"
@@ -898,6 +887,18 @@ export default function AdminDashboard() {
             notify.error("No email on file for this user");
             return;
         }
+        // Build reuploadDocs list from editApprovedDocs (docs admin enabled edit for)
+        const docLabelMap = {
+            personalPhoto: 'Personal Photo', passport: 'Passport',
+            cnicFront: 'CNIC Front', cnicBack: 'CNIC Back',
+            bankStatement: 'Bank Statement', nicScan: 'NIC Scan',
+            bForm: 'B-Form', frc: 'FRC',
+        };
+        const editApprovedDocs = pending.editApprovedDocs || {};
+        const reuploadDocs = Object.entries(editApprovedDocs)
+            .filter(([, enabled]) => enabled)
+            .map(([key]) => docLabelMap[key] || key);
+
         const result = await sendConsolidatedUpdateEmail({
             to: visaItem.email,
             applicantName: visaItem.applicantName,
@@ -908,6 +909,7 @@ export default function AdminDashboard() {
             editAccess: pending.editAccess || null,
             message: pending.message || null,
             documentActions: pending.documentActions || [],
+            reuploadDocs: reuploadDocs.length > 0 ? reuploadDocs : null,
         });
         if (result?.ok !== false) {
             notify.success("One email sent to client with all updates");

@@ -14,7 +14,8 @@ import {
 } from "react-icons/md";
 import { FaUserShield, FaKaaba, FaPassport, FaRegPaperPlane, FaUsersCog, FaMosque, FaBed, FaCar, FaEnvelope } from "react-icons/fa";
 import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db, signOut } from "../firbase";
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage, signOut } from "../firbase";
 import { useAuth } from "../Context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -856,6 +857,8 @@ export default function AdminDashboard() {
 
     // ─── Pending per-user email changes (batched, only sent on "Save") ────────
     const [pendingChanges, setPendingChanges] = useState({});
+    // ─── Decision letter uploads (per visa id) ───────────────────────────────
+    const [decisionDocs, setDecisionDocs] = useState({}); // { [visaId]: File }
 
     const stagePendingChange = (id, patch) => {
         setPendingChanges(prev => {
@@ -899,6 +902,35 @@ export default function AdminDashboard() {
             .filter(([, enabled]) => enabled)
             .map(([key]) => docLabelMap[key] || key);
 
+        // Upload decision letter if provided
+        let decisionDocURL = null;
+        let decisionDocName = null;
+        const decisionFile = decisionDocs[visaItem.id];
+        if (decisionFile) {
+            try {
+                notify.success("Uploading decision letter...");
+                const ext = decisionFile.name.split('.').pop();
+                const newStatus = pending.statusChange?.newStatus;
+                const folder = newStatus === 'Approve' ? 'approved' : newStatus === 'Reject' ? 'rejected' : 'decision';
+                const path = `visa_decisions/${visaItem.id}/${folder}_${Date.now()}.${ext}`;
+                const fileRef = storageRef(storage, path);
+                await uploadBytes(fileRef, decisionFile);
+                decisionDocURL = await getDownloadURL(fileRef);
+                decisionDocName = decisionFile.name;
+                // Save URL to Firestore so DocumentViewer can show it
+                await updateDoc(doc(db, "visaApplications", visaItem.id), {
+                    decisionDocURL,
+                    decisionDocName,
+                    updatedAt: serverTimestamp(),
+                });
+                // Clear from local state
+                setDecisionDocs(prev => { const n = { ...prev }; delete n[visaItem.id]; return n; });
+            } catch (uploadErr) {
+                console.error("Decision letter upload failed:", uploadErr);
+                notify.error("Decision letter upload failed — email will be sent without attachment");
+            }
+        }
+
         const result = await sendConsolidatedUpdateEmail({
             to: visaItem.email,
             applicantName: visaItem.applicantName,
@@ -910,6 +942,8 @@ export default function AdminDashboard() {
             message: pending.message || null,
             documentActions: pending.documentActions || [],
             reuploadDocs: reuploadDocs.length > 0 ? reuploadDocs : null,
+            decisionDocURL,
+            decisionDocName,
         });
         if (result?.ok !== false) {
             notify.success("One email sent to client with all updates");
@@ -1519,7 +1553,7 @@ export default function AdminDashboard() {
 
                     {/* ════ VISAS TAB ════ */}
                     {activeTab === "visas" && (
-                        <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} pendingChanges={pendingChanges} onStage={stagePendingChange} onSavePending={sendPendingEmail} />
+                        <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} pendingChanges={pendingChanges} onStage={stagePendingChange} onSavePending={sendPendingEmail} decisionDocs={decisionDocs} setDecisionDocs={setDecisionDocs} />
                     )}
 
                     {/* ════ UMRAH QUERIES TAB ════ */}
@@ -1623,7 +1657,7 @@ function AdminCountryDropdown({ value, onChange, countries }) {
 }
 
 // ─── VISA PROCESS LIST (Sub-Admin panel styled cards) ─────────────────────────
-function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "", startDate, setStartDate, endDate, setEndDate, pendingChanges = {}, onStage, onSavePending }) {
+function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "", startDate, setStartDate, endDate, setEndDate, pendingChanges = {}, onStage, onSavePending, decisionDocs = {}, setDecisionDocs }) {
     const [search, setSearch] = useState(initialSearch);
     const [statusFilter, setStatusFilter] = useState("All");
     const [countryFilter, setCountryFilter] = useState("All");
@@ -1823,6 +1857,37 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                             </div>
 
                             <div className="flex flex-col items-end justify-between gap-3">
+                                {/* Decision letter upload — shown when Approve or Reject is staged */}
+                                {(pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || pendingChanges[v.id]?.statusChange?.newStatus === 'Reject' || v.status === 'Approve' || v.status === 'Reject') && (
+                                    <div className={`w-full rounded-xl border p-2.5 ${pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                                            📎 {pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve' ? 'Attach Visa Letter' : 'Attach Rejection Letter'} <span className="font-normal text-slate-400">(optional)</span>
+                                        </p>
+                                        {decisionDocs[v.id] ? (
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[11px] text-emerald-700 font-medium truncate max-w-[120px]">{decisionDocs[v.id].name}</span>
+                                                <button onClick={() => setDecisionDocs(prev => { const n={...prev}; delete n[v.id]; return n; })} className="text-red-400 hover:text-red-600 text-xs font-bold">✕</button>
+                                            </div>
+                                        ) : (
+                                            <label className="cursor-pointer">
+                                                <span className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline underline-offset-2">Choose file…</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,.pdf"
+                                                    className="hidden"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) setDecisionDocs(prev => ({ ...prev, [v.id]: file }));
+                                                        e.target.value = '';
+                                                    }}
+                                                />
+                                            </label>
+                                        )}
+                                        {v.decisionDocURL && !decisionDocs[v.id] && (
+                                            <a href={v.decisionDocURL} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline block mt-1">📄 View existing letter</a>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => setSelectedDoc(v)}

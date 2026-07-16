@@ -782,6 +782,47 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                             </div>
                                         </motion.div>
                                     )}
+
+                                    {/* Decision Letter (Approved Visa / Rejection Letter) */}
+                                    {visa.decisionDocURL && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 12 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.55 }}
+                                            className={`mt-6 rounded-2xl p-6 flex gap-4 shadow-sm border ${
+                                                visa.status === 'Approve'
+                                                    ? 'bg-emerald-50 border-emerald-200'
+                                                    : 'bg-red-50 border-red-200'
+                                            }`}
+                                        >
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                                visa.status === 'Approve' ? 'bg-emerald-100' : 'bg-red-100'
+                                            }`}>
+                                                <MdDescription className={`text-xl ${visa.status === 'Approve' ? 'text-emerald-600' : 'text-red-500'}`} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className={`text-base font-bold mb-2 ${visa.status === 'Approve' ? 'text-emerald-700' : 'text-red-700'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
+                                                    {visa.status === 'Approve' ? '✅ Approved Visa Letter' : '❌ Rejection Letter'}
+                                                </h4>
+                                                <p className="text-sm text-slate-600 mb-3">
+                                                    {visa.decisionDocName || 'Decision document attached by admin'}
+                                                </p>
+                                                <a
+                                                    href={visa.decisionDocURL}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white shadow-sm transition-all ${
+                                                        visa.status === 'Approve'
+                                                            ? 'bg-emerald-500 hover:bg-emerald-600'
+                                                            : 'bg-red-500 hover:bg-red-600'
+                                                    }`}
+                                                >
+                                                    <MdFileDownload className="text-base" />
+                                                    View / Download Letter
+                                                </a>
+                                            </div>
+                                        </motion.div>
+                                    )}
                                 </div>
                             </div>
                         )}

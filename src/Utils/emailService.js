@@ -180,6 +180,8 @@ export const sendConsolidatedUpdateEmail = async ({
     message,          // string | null
     documentActions,  // [{ docLabel, action: 'verified'|'reupload_requested'|'deleted', message? }]
     reuploadDocs,     // string[] | null — list of doc labels user is allowed to re-upload
+    decisionDocURL,   // string | null — URL of approved visa / rejection letter to attach
+    decisionDocName,  // string | null — filename for attachment
 }) => {
     if (!to) return { skipped: true };
     try {
@@ -197,6 +199,8 @@ export const sendConsolidatedUpdateEmail = async ({
                 message: message || null,
                 documentActions: documentActions || [],
                 reuploadDocs: reuploadDocs || null,
+                decisionDocURL: decisionDocURL || null,
+                decisionDocName: decisionDocName || null,
             }),
         });
         return { ok: res.ok };

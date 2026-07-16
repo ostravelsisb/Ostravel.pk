@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { db, storage } from '../firbase';
-import { collection, query, getDocs, orderBy, doc, updateDoc, where, getDoc } from 'firebase/firestore'; // Added where, getDoc
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Added storage imports
+import { db } from '../firbase';
+import { collection, query, getDocs, orderBy, doc, updateDoc, where, getDoc } from 'firebase/firestore';
+
+// ImgBB — same key used in ApplyVisa.jsx
+const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
 import { useAuth } from '../Context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt } from 'react-icons/hi'; // Added HiChatAlt
@@ -202,10 +204,26 @@ const UserDashboard = () => {
     };
 
     // Helper: Upload a single file
-    const uploadFile = async (file, path) => {
-        const storageRef = ref(storage, path);
-        await uploadBytes(storageRef, file);
-        return await getDownloadURL(storageRef);
+    // Upload to imgBB (same as ApplyVisa.jsx)
+    const uploadFile = (file, name) => {
+        return new Promise((resolve, reject) => {
+            const form = new FormData();
+            form.append("image", file);
+            form.append("name", name);
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`);
+            xhr.onload = () => {
+                try {
+                    const res = JSON.parse(xhr.responseText);
+                    if (res.success) resolve(res.data.url);
+                    else reject(new Error(res.error?.message || 'ImgBB upload failed'));
+                } catch {
+                    reject(new Error('Invalid response from ImgBB'));
+                }
+            };
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(form);
+        });
     };
 
     const handleSaveVisa = async () => {
@@ -234,7 +252,7 @@ const UserDashboard = () => {
 
                 for (const key of fileKeys) {
                     if (fileInputs[key]) {
-                        const path = `visa_documents/${currentUser.uid}/${editingVisa.applicationNumber}/${key}_${Date.now()}`;
+                        const path = `${editingVisa.applicationNumber}_${key}_${Date.now()}`;
                         const url = await uploadFile(fileInputs[key], path);
                         updatedDocumentURLs[key] = url;
                         console.log(`✅ Uploaded ${key}`);

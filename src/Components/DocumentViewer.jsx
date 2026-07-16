@@ -7,9 +7,8 @@ import { ref, listAll, getDownloadURL, deleteObject } from "firebase/storage";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { storage, db } from "../firbase";
 import { notify } from "./Toast";
-import { sendAdminMessageEmail, sendDocumentVerifiedEmail } from "../Utils/emailService";
 
-const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
+const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [verifiedDocs, setVerifiedDocs] = useState(visa.documentVerification || {});
     const [dynamicDocs, setDynamicDocs] = useState({});
@@ -85,17 +84,15 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
         setVerifiedDocs(newVerifiedDocs);
         if (onVerifyDocument) onVerifyDocument(visa.id, newVerifiedDocs);
 
-        // Only send email when marking as verified (not when un-verifying)
-        if (isNowVerified && visa.email) {
+        // Only stage for email when marking as verified (not when un-verifying).
+        // Actual send happens once, later, from the row's Save button.
+        if (isNowVerified && visa.email && onStage) {
             const docItem = docCategories.find(d => d.key === docKey);
-            const allVerified = docCategories.every(d => d.key === docKey ? true : newVerifiedDocs[d.key]);
-            sendDocumentVerifiedEmail({
-                to: visa.email,
-                applicantName: visa.applicantName,
-                applicationNumber: visa.applicationNumber,
-                country: visa.country,
-                docLabel: docItem?.label || docKey,
-                allVerified,
+            onStage({
+                documentActions: [{
+                    docLabel: docItem?.label || docKey,
+                    action: 'verified',
+                }],
             });
         }
     };
@@ -108,7 +105,7 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
     };
 
     const confirmDelete = async () => {
-        const { docKey } = deleteModal;
+        const { docKey, docLabel } = deleteModal;
         setDeleteModal({ isOpen: false, docKey: '', docLabel: '' });
         setDeleting(docKey);
 
@@ -151,7 +148,16 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
             setDynamicDocs(updatedURLs);
             setVerifiedDocs(updatedVerification);
             setSelectedDoc(null);
-            
+
+            if (onStage && visa.email) {
+                onStage({
+                    documentActions: [{
+                        docLabel,
+                        action: 'deleted',
+                    }],
+                });
+            }
+
             // Trigger refresh of document list
             setRefreshTrigger(prev => prev + 1);
 
@@ -200,19 +206,21 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument }) => {
                 updatedAt: serverTimestamp()
             });
 
-            sendAdminMessageEmail({
-                to: visa.email,
-                applicantName: visa.applicantName,
-                applicationNumber: visa.applicationNumber,
-                country: visa.country,
-                message,
-            });
+            if (onStage) {
+                onStage({
+                    documentActions: [{
+                        docLabel,
+                        action: 'reupload_requested',
+                        message,
+                    }],
+                });
+            }
 
             setVerifiedDocs(updatedVerification);
             setRefreshTrigger(prev => prev + 1);
 
             setTimeout(() => {
-                notify.success(visa.email ? 'Re-upload request sent & emailed to client' : 'Re-upload request sent to user dashboard');
+                notify.success('Re-upload request saved — hit Save on this user\'s row to email it');
             }, 300);
         } catch (error) {
             console.error("Request error:", error);

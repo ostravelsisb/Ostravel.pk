@@ -10,7 +10,7 @@ import {
     MdLogin, MdPersonAdd, MdPhone, MdEmail, MdHotel, MdAirplaneTicket,
     MdDirectionsBus, MdPerson, MdCalendarToday, MdSubject, MdChat,
     MdAdminPanelSettings, MdVerifiedUser, MdShield, MdDelete, MdEdit,
-    MdMoreVert, MdFilterList, MdOpenInNew
+    MdMoreVert, MdFilterList, MdOpenInNew, MdSave
 } from "react-icons/md";
 import { FaUserShield, FaKaaba, FaPassport, FaRegPaperPlane, FaUsersCog, FaMosque, FaBed, FaCar, FaEnvelope } from "react-icons/fa";
 import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -29,7 +29,7 @@ import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUtils";
-import { sendStatusChangeEmail, sendEditAccessEmail, sendUmrahStatusEmail, sendUmrahMessageEmail, sendAdminMessageEmail } from "../Utils/emailService";
+import { sendUmrahStatusEmail, sendUmrahMessageEmail, sendConsolidatedUpdateEmail } from "../Utils/emailService";
 import ToastContainer, { notify } from "../Components/Toast";
 
 
@@ -187,7 +187,7 @@ const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
 };
 
 // ─── SUB-COMPONENT: LIVE ACTION PANEL ────────────────────────────────────────
-const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
+const LiveActionPanel = ({ item, collectionName, onLocalUpdate, onStage }) => {
     const [msg, setMsg] = useState(item.adminMessage || "");
     const [isSending, setIsSending] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
@@ -198,14 +198,9 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
         try {
             await toggleEditApproval(item.id, collectionName, nextState, 'admin@ostravels.com');
             onLocalUpdate(item.id, { editApproved: nextState });
-            if (collectionName === "visaApplications") {
-                sendEditAccessEmail({
-                    to: item.email,
-                    applicantName: item.applicantName,
-                    applicationNumber: item.applicationNumber,
-                    country: item.country,
-                    editEnabled: nextState,
-                    reason: msg,
+            if (collectionName === "visaApplications" && onStage) {
+                onStage(item.id, {
+                    editAccess: { enabled: nextState, reason: msg },
                 });
             }
         } catch (e) { notify.error("Toggle failed"); }
@@ -218,16 +213,10 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
         try {
             await saveAdminMessage(item.id, collectionName, msg);
             onLocalUpdate(item.id, { adminMessage: msg });
-            if (collectionName === "visaApplications") {
-                sendAdminMessageEmail({
-                    to: item.email,
-                    applicantName: item.applicantName,
-                    applicationNumber: item.applicationNumber,
-                    country: item.country,
-                    message: msg,
-                });
+            if (collectionName === "visaApplications" && onStage) {
+                onStage(item.id, { message: msg });
             }
-            notify.success(item.email ? "Message sent to dashboard & emailed to client" : "Message sent to dashboard");
+            notify.success(item.email ? "Message saved — hit Save to email the client" : "Message saved to dashboard");
         } catch (e) { notify.error("Message failed"); }
         setIsSending(false);
     };
@@ -271,7 +260,7 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate }) => {
 };
 
 // ─── SUB-COMPONENT: STATUS DROPDOWN ──────────────────────────────────────────
-const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = false, isUmrah = false, applicant, inquiry }) => {
+const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = false, isUmrah = false, applicant, inquiry, onStage }) => {
     const [loading, setLoading] = useState(false);
     const options = ["Pending", "Investigating", "Processing", "Completed", "Cancelled"];
 
@@ -282,16 +271,8 @@ const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, isVisa = 
         try {
             await updateDoc(doc(db, collectionName, id), { status: val, updatedAt: serverTimestamp() });
             onUpdate(id, { status: val });
-            if (isVisa && applicant) {
-                sendStatusChangeEmail({
-                    to: applicant.email,
-                    applicantName: applicant.applicantName,
-                    applicationNumber: applicant.applicationNumber,
-                    country: applicant.country,
-                    visaType: applicant.visaType,
-                    oldStatus,
-                    newStatus: val,
-                });
+            if (isVisa && applicant && onStage) {
+                onStage(id, { statusChange: { oldStatus, newStatus: val } });
             }
             if (isUmrah && inquiry) {
                 sendUmrahStatusEmail({
@@ -882,6 +863,58 @@ export default function AdminDashboard() {
         if (type === 'visa') setVisas(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
         if (type === 'policy') setPolicies(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
         if (type === 'umrah') setInquiries(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+    };
+
+    // ─── Pending per-user email changes (batched, only sent on "Save") ────────
+    const [pendingChanges, setPendingChanges] = useState({});
+
+    const stagePendingChange = (id, patch) => {
+        setPendingChanges(prev => {
+            const existing = prev[id] || {};
+            const merged = { ...existing, ...patch };
+            // documentActions accumulate instead of overwriting
+            if (patch.documentActions) {
+                merged.documentActions = [...(existing.documentActions || []), ...patch.documentActions];
+            }
+            return { ...prev, [id]: merged };
+        });
+    };
+
+    const clearPendingChange = (id) => {
+        setPendingChanges(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+    };
+
+    const sendPendingEmail = async (visaItem) => {
+        const pending = pendingChanges[visaItem.id];
+        if (!pending || Object.keys(pending).length === 0) {
+            notify.error("No pending changes for this user yet");
+            return;
+        }
+        if (!visaItem.email) {
+            notify.error("No email on file for this user");
+            return;
+        }
+        const result = await sendConsolidatedUpdateEmail({
+            to: visaItem.email,
+            applicantName: visaItem.applicantName,
+            applicationNumber: visaItem.applicationNumber,
+            country: visaItem.country,
+            visaType: visaItem.visaType,
+            statusChange: pending.statusChange || null,
+            editAccess: pending.editAccess || null,
+            message: pending.message || null,
+            documentActions: pending.documentActions || [],
+        });
+        if (result?.ok !== false) {
+            notify.success("One email sent to client with all updates");
+            clearPendingChange(visaItem.id);
+        } else {
+            notify.error("Failed to send email — try again");
+        }
     };
 
     const stats = useMemo(() => ({
@@ -1484,7 +1517,7 @@ export default function AdminDashboard() {
 
                     {/* ════ VISAS TAB ════ */}
                     {activeTab === "visas" && (
-                        <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} />
+                        <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} pendingChanges={pendingChanges} onStage={stagePendingChange} onSavePending={sendPendingEmail} />
                     )}
 
                     {/* ════ UMRAH QUERIES TAB ════ */}
@@ -1511,7 +1544,8 @@ export default function AdminDashboard() {
                         onVerifyDocument={async (id, data) => {
                             await updateDoc(doc(db, "visaApplications", id), { documentVerification: data });
                             updateLocal('visa', id, { documentVerification: data });
-                        }} />
+                        }}
+                        onStage={(patch) => stagePendingChange(selectedDoc.id, patch)} />
                 )}
                 {historyVisa && <EditHistoryModal visa={historyVisa} onClose={() => setHistoryVisa(null)} />}
             </AnimatePresence>
@@ -1587,7 +1621,7 @@ function AdminCountryDropdown({ value, onChange, countries }) {
 }
 
 // ─── VISA PROCESS LIST (Sub-Admin panel styled cards) ─────────────────────────
-function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "", startDate, setStartDate, endDate, setEndDate }) {
+function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "", startDate, setStartDate, endDate, setEndDate, pendingChanges = {}, onStage, onSavePending }) {
     const [search, setSearch] = useState(initialSearch);
     const [statusFilter, setStatusFilter] = useState("All");
     const [countryFilter, setCountryFilter] = useState("All");
@@ -1772,6 +1806,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                     onUpdate={(id, up) => updateLocal('visa', id, up)}
                                     isVisa
                                     applicant={v}
+                                    onStage={onStage}
                                 />
                             </div>
 
@@ -1781,16 +1816,46 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                     item={v}
                                     collectionName="visaApplications"
                                     onLocalUpdate={(id, up) => updateLocal('visa', id, up)}
+                                    onStage={onStage}
                                 />
                             </div>
 
                             <div className="flex flex-col items-end justify-between gap-3">
-                                <button
-                                    onClick={() => setSelectedDoc(v)}
-                                    className="inline-flex items-center justify-center w-12 h-12 rounded-3xl bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all shadow-sm"
-                                >
-                                    <MdVisibility className="text-xl" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setSelectedDoc(v)}
+                                        className="inline-flex items-center justify-center w-12 h-12 rounded-3xl bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all shadow-sm"
+                                        title="View documents"
+                                    >
+                                        <MdVisibility className="text-xl" />
+                                    </button>
+                                    {(() => {
+                                        const pending = pendingChanges[v.id];
+                                        const pendingCount = pending
+                                            ? Object.keys(pending).filter(k => k !== 'documentActions').length + (pending.documentActions?.length || 0)
+                                            : 0;
+                                        const hasPending = pendingCount > 0;
+                                        return (
+                                            <button
+                                                onClick={() => onSavePending && onSavePending(v)}
+                                                disabled={!hasPending}
+                                                className={`relative inline-flex items-center justify-center w-12 h-12 rounded-3xl transition-all shadow-sm ${
+                                                    hasPending
+                                                        ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                                                        : "bg-slate-100 text-slate-300 cursor-not-allowed"
+                                                }`}
+                                                title={hasPending ? `Send 1 email with ${pendingCount} pending update(s)` : "No pending changes to email"}
+                                            >
+                                                <MdSave className="text-xl" />
+                                                {hasPending && (
+                                                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+                                                        {pendingCount}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })()}
+                                </div>
                                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${
                                     v.status === "Approve" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
                                     v.status === "Reject" ? "bg-red-50 text-red-600 border border-red-100" :

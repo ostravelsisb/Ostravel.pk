@@ -164,3 +164,42 @@ export const sendDocumentVerifiedEmail = async ({
         console.error("Failed to send document-verified email:", err);
     }
 };
+
+// ─── NEW: single consolidated email ──────────────────────────────────────────
+// Bundles status change + edit-access + admin message + all document actions
+// (verify / reupload-request / delete) into ONE email. Fired only from the
+// per-row "Save" button — never automatically by individual actions.
+export const sendConsolidatedUpdateEmail = async ({
+    to,
+    applicantName,
+    applicationNumber,
+    country,
+    visaType,
+    statusChange,     // { oldStatus, newStatus } | null
+    editAccess,       // { enabled, reason } | null
+    message,          // string | null
+    documentActions,  // [{ docLabel, action: 'verified'|'reupload_requested'|'deleted', message? }]
+}) => {
+    if (!to) return { skipped: true };
+    try {
+        const res = await fetch(`${EMAIL_API_BASE}/consolidated-update`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                to,
+                applicantName,
+                applicationNumber,
+                country,
+                visaType,
+                statusChange: statusChange || null,
+                editAccess: editAccess || null,
+                message: message || null,
+                documentActions: documentActions || [],
+            }),
+        });
+        return { ok: res.ok };
+    } catch (err) {
+        console.error("Failed to send consolidated-update email:", err);
+        return { ok: false, error: err };
+    }
+};

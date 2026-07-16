@@ -162,16 +162,19 @@ const ModernCountryDropdown = ({ value, onChange, options, assignedCountries }) 
 const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = React.useRef(null);
-    const options = ["Doc Received", "Analyzing", "Approved", "Rejected"];
+    const options = ["Doc Received", "Analyzing", "Req Document", "Visa in Process", "Interview", "Approve", "Reject"];
 
     const statusColors = {
         "Doc Received": { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200", dot: "bg-sky-500" },
         "Analyzing": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
-        "Approved": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
-        "Rejected": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
+        "Req Document": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-500" },
+        "Visa in Process": { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", dot: "bg-indigo-500" },
+        "Interview": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
+        "Approve": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
+        "Reject": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
     };
 
-    const currentColor = statusColors[currentStatus || "Doc Received"];
+    const currentColor = statusColors[currentStatus || "Doc Received"] || statusColors["Doc Received"];
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -471,8 +474,8 @@ export default function SubAdminPanel() {
         total: visas.length,
         docReceived: visas.filter(v => v.status === "Doc Received").length,
         analyzing: visas.filter(v => v.status === "Analyzing").length,
-        approved: visas.filter(v => v.status === "Approved").length,
-        rejected: visas.filter(v => v.status === "Rejected").length,
+        approved: visas.filter(v => v.status === "Approve").length,
+        rejected: visas.filter(v => v.status === "Reject").length,
     }), [visas]);
 
     // --- CHART DATA ---
@@ -489,7 +492,7 @@ export default function SubAdminPanel() {
             const d = parseDate(v.applicationDate);
             if (!d) return;
             totals[d.getDay()].applications += 1;
-            if (v.status === "Approved") totals[d.getDay()].approved += 1;
+            if (v.status === "Approve") totals[d.getDay()].approved += 1;
         });
         return totals;
     }, [visas]);
@@ -515,7 +518,7 @@ export default function SubAdminPanel() {
                 const d = parseDate(v.applicationDate);
                 if (d && d >= cutoff) {
                     totals[d.getMonth()].applications += 1;
-                    if (v.status === "Approved") totals[d.getMonth()].approved += 1;
+                    if (v.status === "Approve") totals[d.getMonth()].approved += 1;
                 }
             });
             if (salesPeriod === "This Year") return totals.slice(0, now.getMonth() + 1);
@@ -527,7 +530,7 @@ export default function SubAdminPanel() {
                 const d = parseDate(v.applicationDate);
                 if (d && (!cutoff || d >= cutoff)) {
                     totals[d.getDay()].applications += 1;
-                    if (v.status === "Approved") totals[d.getDay()].approved += 1;
+                    if (v.status === "Approve") totals[d.getDay()].approved += 1;
                 }
             });
             return totals;
@@ -542,7 +545,7 @@ export default function SubAdminPanel() {
         else if (overallPeriod === "Last 12 Months") { cutoff = new Date(now); cutoff.setFullYear(cutoff.getFullYear() - 1); }
         else if (overallPeriod === "This Year") { cutoff = new Date(now.getFullYear(), 0, 1); }
         const filtered = cutoff ? visas.filter(v => { const d = parseDate(v.applicationDate); return d && d >= cutoff; }) : visas;
-        const approved = filtered.filter(v => v.status === "Approved").length;
+        const approved = filtered.filter(v => v.status === "Approve").length;
         const docReceived = filtered.filter(v => v.status === "Doc Received").length;
         const analyzing = filtered.filter(v => v.status === "Analyzing").length;
         const total = filtered.length || 0;
@@ -980,7 +983,7 @@ export default function SubAdminPanel() {
                                     variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                                     whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(16,185,129,0.25)" }}
                                     transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => { setStatusFilter("Approved"); setActiveTab("visas"); }}
+                                    onClick={() => { setStatusFilter("Approve"); setActiveTab("visas"); }}
                                     whileTap={{ scale: 0.97 }}
                                     className="bg-[#E6F9F0] rounded-2xl p-5 border border-black/5 cursor-pointer"
                                 >
@@ -999,7 +1002,7 @@ export default function SubAdminPanel() {
                                     variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                                     whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(248,113,113,0.25)" }}
                                     transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => { setStatusFilter("Rejected"); setActiveTab("visas"); }}
+                                    onClick={() => { setStatusFilter("Reject"); setActiveTab("visas"); }}
                                     whileTap={{ scale: 0.97 }}
                                     className="bg-[#FEE8E8] rounded-2xl p-5 border border-black/5 cursor-pointer"
                                 >
@@ -1080,7 +1083,7 @@ export default function SubAdminPanel() {
                                     </div>
                                     <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
                                         <span className="text-[13px] font-bold text-red-500">-20% vs Last Month</span>
-                                        <button onClick={() => { setStatusFilter("Rejected"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
+                                        <button onClick={() => { setStatusFilter("Reject"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
                                     </div>
                                 </motion.div>
                             </motion.div>
@@ -1137,7 +1140,7 @@ export default function SubAdminPanel() {
                                                 cursor={{ fill: "rgba(0,0,0,0.03)" }}
                                             />
                                             <Bar dataKey="applications" name="Applications" fill="#A5B4FC" radius={[6, 6, 0, 0]} />
-                                            <Bar dataKey="approved" name="Approved" fill="#6366F1" radius={[6, 6, 0, 0]} />
+                                            <Bar dataKey="approved" name="Approve" fill="#6366F1" radius={[6, 6, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                     <div className="flex items-center justify-center gap-6 mt-3 text-sm font-bold text-gray-500">
@@ -1187,7 +1190,7 @@ export default function SubAdminPanel() {
                                                     outerRadius="100%"
                                                     barSize={10}
                                                     data={[
-                                                        { name: "Approved", value: donutData.approvedPct, fill: "#6366F1" },
+                                                        { name: "Approve", value: donutData.approvedPct, fill: "#6366F1" },
                                                         { name: "Pending", value: donutData.pendingPct, fill: "#FBBF24" },
                                                     ]}
                                                     startAngle={90}
@@ -1302,8 +1305,8 @@ export default function SubAdminPanel() {
                                                         <p className="text-[12px] text-gray-400 truncate">{visa.country} • {visa.visaType}</p>
                                                     </div>
                                                     <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
-                                                        visa.status === "Approved" ? "bg-emerald-50 text-emerald-600" :
-                                                        visa.status === "Rejected" ? "bg-red-50 text-red-500" :
+                                                        visa.status === "Approve" ? "bg-emerald-50 text-emerald-600" :
+                                                        visa.status === "Reject" ? "bg-red-50 text-red-500" :
                                                         visa.status === "Analyzing" ? "bg-amber-50 text-amber-600" :
                                                         "bg-sky-50 text-sky-600"
                                                     }`}>
@@ -1456,7 +1459,7 @@ export default function SubAdminPanel() {
                             {/* Status Filter Pills + Country Filter */}
                             <div className="flex flex-wrap items-center gap-3">
                                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-2 inline-flex gap-1.5 flex-wrap">
-                                    {["All", "Doc Received", "Analyzing", "Approved", "Rejected"].map(status => (
+                                    {["All", "Doc Received", "Analyzing", "Req Document", "Visa in Process", "Interview", "Approve", "Reject"].map(status => (
                                         <button
                                             key={status}
                                             onClick={() => setStatusFilter(status)}
@@ -1473,7 +1476,7 @@ export default function SubAdminPanel() {
                                                 }`}>
                                                     {status === "Doc Received" ? stats.docReceived :
                                                      status === "Analyzing" ? stats.analyzing :
-                                                     status === "Approved" ? stats.approved :
+                                                     status === "Approve" ? stats.approved :
                                                      stats.rejected}
                                                 </span>
                                             )}
@@ -1579,8 +1582,8 @@ export default function SubAdminPanel() {
                                                     <MdVisibility className="text-xl" />
                                                 </button>
                                                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${
-                                                    v.status === "Approved" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                                                    v.status === "Rejected" ? "bg-red-50 text-red-600 border border-red-100" :
+                                                    v.status === "Approve" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                                                    v.status === "Reject" ? "bg-red-50 text-red-600 border border-red-100" :
                                                     v.status === "Analyzing" ? "bg-amber-50 text-amber-700 border border-amber-100" :
                                                     "bg-sky-50 text-sky-700 border border-sky-100"
                                                 }`}>

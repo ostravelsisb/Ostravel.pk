@@ -99,13 +99,16 @@ const UMRAH_STATUS_STYLES = {
 const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = React.useRef(null);
-    const options = ["Doc Received", "Analyzing", "Approved", "Rejected"];
+    const options = ["Doc Received", "Analyzing", "Req Document", "Visa in Process", "Interview", "Approve", "Reject"];
 
     const statusColors = {
         "Doc Received": { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200", dot: "bg-sky-500" },
         "Analyzing": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
-        "Approved": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
-        "Rejected": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
+        "Req Document": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-500" },
+        "Visa in Process": { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", dot: "bg-indigo-500" },
+        "Interview": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
+        "Approve": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
+        "Reject": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
     };
 
     const currentColor = statusColors[currentStatus] || statusColors["Doc Received"];
@@ -884,8 +887,8 @@ export default function AdminDashboard() {
     const stats = useMemo(() => ({
         revenue: policies.reduce((a, b) => a + (Number(b.amount) || 0), 0),
         pending: visas.filter(v => v.status === "Doc Received").length,
-        approved: visas.filter(v => v.status === "Approved").length,
-        rejected: visas.filter(v => v.status === "Rejected").length,
+        approved: visas.filter(v => v.status === "Approve").length,
+        rejected: visas.filter(v => v.status === "Reject").length,
     }), [visas, policies]);
 
     const parseDate = (d) => {
@@ -977,18 +980,18 @@ export default function AdminDashboard() {
         else if (overallPeriod === "Last 12 Months") { cutoff = new Date(now); cutoff.setFullYear(cutoff.getFullYear() - 1); }
         else if (overallPeriod === "This Year") { cutoff = new Date(now.getFullYear(), 0, 1); }
         const filtered = cutoff ? visas.filter(v => { const d = parseDate(v.applicationDate); return d && d >= cutoff; }) : visas;
-        const approved = filtered.filter(v => v.status === "Approved").length;
+        const approved = filtered.filter(v => v.status === "Approve").length;
         const pending = filtered.filter(v => v.status === "Doc Received" || v.status === "Analyzing").length;
-        const rejected = filtered.filter(v => v.status === "Rejected").length;
+        const rejected = filtered.filter(v => v.status === "Reject").length;
         const total = approved + pending + rejected;
         return {
             total, approved, pending, rejected,
             approvedPct: total ? Math.round((approved / total) * 100) : 0,
             pendingPct: total ? Math.round((pending / total) * 100) : 0,
             chart: [
-                { name: "Approved", value: approved || 0.0001, color: "#22C55E" },
+                { name: "Approve", value: approved || 0.0001, color: "#22C55E" },
                 { name: "Pending", value: pending || 0.0001, color: "#F97316" },
-                { name: "Rejected", value: rejected || 0.0001, color: "#E2E8F0" },
+                { name: "Reject", value: rejected || 0.0001, color: "#E2E8F0" },
             ],
         };
     }, [visas, overallPeriod]);
@@ -1263,9 +1266,9 @@ export default function AdminDashboard() {
                             {/* Secondary Stats */}
                             <motion.div className="grid grid-cols-1 md:grid-cols-3 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
                                 {[
-                                    { label: "Total Approved Visas", value: stats.approved, trend: "+35% vs Last Month", trendColor: "text-emerald-600", action: () => goToVisas("Approved"), icon: <MdOutlineContentCopy className="text-orange-500 text-2xl" />, iconBg: "bg-orange-50" },
+                                    { label: "Total Approved Visas", value: stats.approved, trend: "+35% vs Last Month", trendColor: "text-emerald-600", action: () => goToVisas("Approve"), icon: <MdOutlineContentCopy className="text-orange-500 text-2xl" />, iconBg: "bg-orange-50" },
                                     { label: "Docs Awaiting Review", value: stats.pending, trend: "-20% vs Last Month", trendColor: "text-red-500", action: () => goToVisas("Doc Received"), icon: <MdOutlineCreditCard className="text-orange-500 text-2xl" />, iconBg: "bg-orange-50" },
-                                    { label: "Rejected Applications", value: stats.rejected, trend: "-20% vs Last Month", trendColor: "text-red-500", action: () => goToVisas("Rejected"), icon: <MdReceipt className="text-amber-500 text-2xl" />, iconBg: "bg-amber-50" },
+                                    { label: "Rejected Applications", value: stats.rejected, trend: "-20% vs Last Month", trendColor: "text-red-500", action: () => goToVisas("Reject"), icon: <MdReceipt className="text-amber-500 text-2xl" />, iconBg: "bg-amber-50" },
                                 ].map((c, i) => (
                                     <motion.div key={i} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                                         whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }} transition={{ duration: 0.35, ease: "easeOut" }}
@@ -1352,7 +1355,7 @@ export default function AdminDashboard() {
                                         <div className="relative w-[140px] h-[140px] shrink-0">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <RadialBarChart cx="50%" cy="50%" innerRadius="55%" outerRadius="100%" barSize={10}
-                                                    data={[{ name: "Approved", value: donutData.approvedPct, fill: "#22C55E" }, { name: "Pending", value: donutData.pendingPct, fill: "#FFB020" }]}
+                                                    data={[{ name: "Approve", value: donutData.approvedPct, fill: "#22C55E" }, { name: "Pending", value: donutData.pendingPct, fill: "#FFB020" }]}
                                                     startAngle={90} endAngle={-270}>
                                                     <RadialBar background={{ fill: "#EEF1F4" }} dataKey="value" cornerRadius={20} clockWise />
                                                 </RadialBarChart>
@@ -1400,7 +1403,7 @@ export default function AdminDashboard() {
                                                     <p className="text-base font-bold text-gray-700 truncate">{a.title || "Unnamed"}</p>
                                                     <p className="text-[12px] text-gray-400 truncate">{a.sub}</p>
                                                 </div>
-                                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${a.status === "Approved" ? "bg-emerald-50 text-emerald-600" : a.status === "Rejected" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500"}`}>
+                                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${a.status === "Approve" ? "bg-emerald-50 text-emerald-600" : a.status === "Reject" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500"}`}>
                                                     {a.status || "Pending"}
                                                 </span>
                                             </motion.button>
@@ -1600,8 +1603,8 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
         total: visas.length,
         docReceived: visas.filter(v => v.status === "Doc Received").length,
         analyzing: visas.filter(v => v.status === "Analyzing").length,
-        approved: visas.filter(v => v.status === "Approved").length,
-        rejected: visas.filter(v => v.status === "Rejected").length,
+        approved: visas.filter(v => v.status === "Approve").length,
+        rejected: visas.filter(v => v.status === "Reject").length,
     }), [visas]);
 
     useEffect(() => { setPage(1); }, [search, statusFilter, countryFilter]);
@@ -1669,7 +1672,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
             {/* Status Filter Pills + Country Dropdown */}
             <div className="flex flex-wrap items-center gap-3">
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-2 inline-flex gap-1.5 flex-wrap">
-                    {["All", "Doc Received", "Analyzing", "Approved", "Rejected"].map(status => (
+                    {["All", "Doc Received", "Analyzing", "Req Document", "Visa in Process", "Interview", "Approve", "Reject"].map(status => (
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
@@ -1686,7 +1689,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                 }`}>
                                     {status === "Doc Received" ? stats.docReceived :
                                      status === "Analyzing" ? stats.analyzing :
-                                     status === "Approved" ? stats.approved :
+                                     status === "Approve" ? stats.approved :
                                      stats.rejected}
                                 </span>
                             )}
@@ -1789,8 +1792,8 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                     <MdVisibility className="text-xl" />
                                 </button>
                                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${
-                                    v.status === "Approved" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                                    v.status === "Rejected" ? "bg-red-50 text-red-600 border border-red-100" :
+                                    v.status === "Approve" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                                    v.status === "Reject" ? "bg-red-50 text-red-600 border border-red-100" :
                                     v.status === "Analyzing" ? "bg-amber-50 text-amber-700 border border-amber-100" :
                                     "bg-sky-50 text-sky-700 border border-sky-100"
                                 }`}>

@@ -287,7 +287,7 @@ const LiveActionPanel = ({ item, collectionName, onLocalUpdate, currentUser, use
     return (
         <div className="flex flex-col gap-2 min-w-[220px]">
             {item.userConfirmed && (
-                <span className="text-[11px] font-bold text-orange-600 animate-bounce">RE-SUBMITTED</span>
+                <span className="text-[11px] font-bold text-orange-600 animate-bounce"></span>
             )}
             <div className="relative">
                 <input

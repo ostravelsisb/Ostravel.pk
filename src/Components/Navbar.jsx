@@ -332,7 +332,7 @@ function Navbar() {
           <div className="flex-1 flex justify-center">
             <Link to="/">
               <div className="flex items-center gap-2">
-                <img src={logo} alt="OS Logo" className="w-[36px] h-[36px] object-contain" />
+                <img src={logo} alt="OS Logo" className="w-[66px] h-[66px] object-contain" />
                 <div className="w-px h-7 bg-gray-300" />
                 <span className="text-base font-extrabold tracking-tight text-blue-600">O.S Travel & Tours</span>
               </div>

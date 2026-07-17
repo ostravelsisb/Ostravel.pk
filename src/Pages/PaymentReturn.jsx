@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db, storage } from "../firbase"; // Import storage
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { sendInvoiceEmail } from '../Utils/emailService';
 
 export default function PaymentReturn() {
   const navigate = useNavigate();
@@ -196,6 +197,26 @@ export default function PaymentReturn() {
       // Now safe to clear pending data after successful save
       sessionStorage.removeItem('pending_visa_application');
 
+      // Fire-and-forget invoice email (PDF attached) - never blocks the UI flow
+      sendInvoiceEmail({
+        to: parsedVisaData.email,
+        recordType: 'visa',
+        invoiceNumber: applicationNumber,
+        applicantName: parsedVisaData.applicantName,
+        email: parsedVisaData.email,
+        phone: parsedVisaData.phone,
+        country: parsedVisaData.country,
+        visaType: parsedVisaData.visaType,
+        amountPaid: parseFloat(paymentVerification.data?.TransactionAmount || parsedVisaData.totalFee || 0),
+        visaFee: parsedVisaData.visaFee,
+        urgentFee: parsedVisaData.urgentFee,
+        urgentProcessing: parsedVisaData.urgentProcessing,
+        transactionId: paymentVerification.data?.TransactionId || orderId,
+        transactionRef: orderId,
+        paymentMethod: 'Bank Alfalah',
+        paidAt: new Date().toISOString(),
+      });
+
       setPaymentStatus('success');
       setPolicyDetails(completeApplicationData.applicationData);
       setLoading(false);
@@ -255,6 +276,22 @@ export default function PaymentReturn() {
       };
 
       localStorage.setItem('latest_policy', JSON.stringify(completePolicyData));
+
+      // Fire-and-forget invoice email (PDF attached) - never blocks the UI flow
+      sendInvoiceEmail({
+        to: parsedCustomerInfo.email,
+        recordType: 'insurance',
+        invoiceNumber: policyCreation.data.policyNumber,
+        applicantName: parsedCustomerInfo.name,
+        email: parsedCustomerInfo.email,
+        phone: parsedCustomerInfo.mobile,
+        planName: parsedPolicyData.planName,
+        amountPaid: parseFloat(paymentVerification.data?.TransactionAmount || parsedCustomerInfo.amount || 0),
+        transactionId: paymentVerification.data?.TransactionId,
+        transactionRef: paymentVerification.data?.TransactionReferenceNumber || orderId,
+        paymentMethod: 'Bank Alfalah',
+        paidAt: paymentVerification.data?.TransactionDateTime || new Date().toISOString(),
+      });
 
       setPaymentStatus('success');
       setPolicyDetails(policyCreation.data);
@@ -452,6 +489,7 @@ export default function PaymentReturn() {
         email: visaData.email || '',
         phone: visaData.phone || '',
         cnic: visaData.cnic || '',
+        passportNumber: visaData.passportNumber || '',
         country: visaData.country || '',
         visaType: visaData.visaType || '',
         visaFee: visaData.visaFee || 0,

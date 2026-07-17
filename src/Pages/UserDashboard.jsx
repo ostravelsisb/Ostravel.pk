@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firbase';
-import { collection, query, getDocs, orderBy, doc, updateDoc, where, getDoc } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, doc, updateDoc, where, getDoc, onSnapshot } from 'firebase/firestore';
 
 // ImgBB — same key used in ApplyVisa.jsx
 const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
 import { useAuth } from '../Context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt } from 'react-icons/hi'; // Added HiChatAlt
-import { updateApplicationData } from '../Utils/ApplicationEditUtils';
+import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt, HiReceiptTax } from 'react-icons/hi'; // Added HiChatAlt, HiReceiptTax
+import { updateApplicationData, markMessageSeen, hasUnseenMessage } from '../Utils/ApplicationEditUtils';
 import { getCachedData, setCachedData } from '../Utils/cacheUtils';
 import { getAllCountryNames, getVisaDataByCountry } from '../Data/visaData'; // Import country data
+import InvoiceModal from '../Components/InvoiceModal';
+import ToastContainer, { notify } from '../Components/Toast';
 
 const UserDashboard = () => {
     const { currentUser } = useAuth();
@@ -21,6 +23,7 @@ const UserDashboard = () => {
     // View States
     const [viewingVisa, setViewingVisa] = useState(null);
     const [viewingPolicy, setViewingPolicy] = useState(null);
+    const [invoiceRecord, setInvoiceRecord] = useState(null); // { record, recordType }
 
     // Edit States
     const [editingVisa, setEditingVisa] = useState(null);
@@ -71,80 +74,49 @@ const UserDashboard = () => {
     });
 
     useEffect(() => {
-        const fetchData = async () => {
-            if (!currentUser) {
-                console.log('⏸️ No user logged in, skipping data fetch');
-                setLoading(false);
-                return;
-            }
+        if (!currentUser) {
+            console.log('⏸️ No user logged in, skipping data fetch');
+            setLoading(false);
+            return;
+        }
 
-            console.log('🔍 Fetching data for user:', currentUser.email);
+        // 1. Load from cache first for instant paint
+        const cachedVisas = getCachedData(`visas_${currentUser.uid}`);
+        const cachedPolicies = getCachedData(`policies_${currentUser.uid}`);
+        if (cachedVisas) setVisaApplications(cachedVisas);
+        if (cachedPolicies) setPolicies(cachedPolicies);
+        if (cachedVisas && cachedPolicies) setLoading(false);
 
-            try {
+        // 2. Realtime listener for visa applications — so admin/subadmin actions
+        // (reupload requests, status changes, verifications) appear instantly
+        // without the user needing to refresh the page.
+        const visasQ = query(
+            collection(db, 'visaApplications'),
+            where('email', '==', currentUser.email),
+            orderBy('applicationDate', 'desc')
+        );
 
-                // 1. Try to load from cache first
-                const cachedVisas = getCachedData(`visas_${currentUser.uid}`);
-                const cachedPolicies = getCachedData(`policies_${currentUser.uid}`);
-
-                if (cachedVisas) {
-                    console.log('⚡ Loaded visas from cache');
-                    setVisaApplications(cachedVisas);
-                }
-
-                if (cachedPolicies) {
-                    console.log('⚡ Loaded policies from cache');
-                    setPolicies(cachedPolicies);
-                }
-
-                // If we have both cached, we can stop loading (background refresh will continue)
-                if (cachedVisas && cachedPolicies) {
-                    setLoading(false);
-                }
-
-                // 2. Fetch fresh data from Firestore
-                // Fetch ONLY current user's visa applications
-                // Filter by email (primary) and uid (fallback)
-                const visasQ = query(
-                    collection(db, 'visaApplications'),
-                    where('email', '==', currentUser.email),
-                    orderBy('applicationDate', 'desc')
-                );
-
-                console.log('📥 Fetching visa applications...');
-                const visasSnapshot = await getDocs(visasQ);
-                const visasData = visasSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    applicationDate: doc.data().applicationDate?.toDate()
+        const visasUnsub = onSnapshot(
+            visasQ,
+            (snapshot) => {
+                const visasData = snapshot.docs.map(d => ({
+                    id: d.id,
+                    ...d.data(),
+                    applicationDate: d.data().applicationDate?.toDate()
                 }));
-
-                console.log(`✅ Found ${visasData.length} visa application(s)`);
                 setVisaApplications(visasData);
-                setCachedData(`visas_${currentUser.uid}`, visasData); // Update cache
+                setCachedData(`visas_${currentUser.uid}`, visasData);
 
-                // Fetch ONLY current user's insurance policies
-                // Try email first, fallback to other fields if needed
-                const policiesQ = query(
-                    collection(db, 'insurancesCustumer'),
-                    where('userEmail', '==', currentUser.email),
-                    orderBy('purchaseDate', 'desc')
-                );
+                // Keep the currently open modals in sync with live data too,
+                // so a re-upload request or status change shows up immediately
+                // even while the user has a modal open.
+                setViewingVisa(prev => prev ? (visasData.find(v => v.id === prev.id) || prev) : prev);
+                setEditingVisa(prev => prev ? (visasData.find(v => v.id === prev.id) || prev) : prev);
 
-                console.log('📥 Fetching insurance policies...');
-                const policiesSnapshot = await getDocs(policiesQ);
-                const policiesData = policiesSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    purchaseDate: doc.data().purchaseDate?.toDate()
-                }));
-
-                console.log(`✅ Found ${policiesData.length} insurance polic(ies)`);
-                setPolicies(policiesData);
-
-            } catch (error) {
-                console.error("❌ Error fetching data:", error);
-
-                // Handle specific error types
+                setLoading(false);
+            },
+            (error) => {
+                console.error("❌ Error listening to visa applications:", error);
                 if (error.code === 'permission-denied') {
                     alert('⚠️ Access denied. Please contact support.\n\nError: You do not have permission to view this data.');
                 } else if (error.code === 'failed-precondition') {
@@ -152,19 +124,34 @@ const UserDashboard = () => {
                     alert('⚠️ Database configuration needed.\n\nPlease contact support to set up required indexes.');
                 } else if (error.code === 'unavailable') {
                     alert('⚠️ Network error. Please check your internet connection and try again.');
-                } else {
-                    alert('⚠️ Failed to load your applications.\n\nPlease refresh the page or contact support if the issue persists.');
                 }
-
-                // Set empty arrays on error
-                setVisaApplications([]);
-                setPolicies([]);
-            } finally {
                 setLoading(false);
             }
-        };
+        );
 
-        fetchData();
+        // 3. Insurance policies (one-time fetch — no reupload flow involved here)
+        const fetchPolicies = async () => {
+            try {
+                const policiesQ = query(
+                    collection(db, 'insurancesCustumer'),
+                    where('userEmail', '==', currentUser.email),
+                    orderBy('purchaseDate', 'desc')
+                );
+                const policiesSnapshot = await getDocs(policiesQ);
+                const policiesData = policiesSnapshot.docs.map(d => ({
+                    id: d.id,
+                    ...d.data(),
+                    purchaseDate: d.data().purchaseDate?.toDate()
+                }));
+                setPolicies(policiesData);
+                setCachedData(`policies_${currentUser.uid}`, policiesData);
+            } catch (error) {
+                console.error("❌ Error fetching policies:", error);
+            }
+        };
+        fetchPolicies();
+
+        return () => visasUnsub();
     }, [currentUser]);
 
     const getStatusBadge = (status) => {
@@ -227,90 +214,54 @@ const UserDashboard = () => {
     };
 
     const handleSaveVisa = async () => {
-        console.log('🚀 handleSaveVisa CALLED!');
-
-        if (!editingVisa) {
-            console.error('❌ No editing visa found!');
-            return;
-        }
-
-        console.log('📋 Editing visa ID:', editingVisa.id);
-        console.log('📝 Form data:', editFormData);
-        console.log('📁 File inputs:', Object.keys(fileInputs));
+        if (!editingVisa) return;
 
         setSaving(true);
         try {
             let updatedData = { ...editFormData };
             let updatedDocumentURLs = { ...(editingVisa.documentURLs || {}) };
-            let hasNewFiles = Object.keys(fileInputs).length > 0;
+            const fileKeys = ['personalPhoto', 'passport', 'cnicFront', 'cnicBack', 'bankStatement', 'nicScan', 'bForm', 'frc'];
+            // Only the keys the user actually selected a file for get locked +
+            // marked as re-uploaded — any other requested doc stays open
+            // (Issue #4: partial re-upload no longer closes the whole session).
+            const uploadedKeys = fileKeys.filter((key) => !!fileInputs[key]);
+            const hasNewFiles = uploadedKeys.length > 0;
 
-            // Handle File Uploads
             if (hasNewFiles) {
-                console.log('📤 Uploading', Object.keys(fileInputs).length, 'files...');
                 setUploadingFiles(true);
-                const fileKeys = ['passport', 'photo', 'cnicFront', 'cnicBack', 'bankStatement', 'nicScan', 'bForm', 'frc'];
-
-                for (const key of fileKeys) {
-                    if (fileInputs[key]) {
-                        const path = `${editingVisa.applicationNumber}_${key}_${Date.now()}`;
-                        const url = await uploadFile(fileInputs[key], path);
-                        updatedDocumentURLs[key] = url;
-                        console.log(`✅ Uploaded ${key}`);
-                    }
+                for (const key of uploadedKeys) {
+                    const path = `${editingVisa.applicationNumber}_${key}_${Date.now()}`;
+                    const url = await uploadFile(fileInputs[key], path);
+                    updatedDocumentURLs[key] = url;
                 }
                 updatedData.documentURLs = updatedDocumentURLs;
                 setUploadingFiles(false);
             }
 
-            console.log('💾 Calling updateApplicationData with trackChanges=TRUE');
+            await updateApplicationData(editingVisa.id, 'visaApplications', updatedData, true, uploadedKeys);
 
-            // Use updateApplicationData with tracking enabled
-            await updateApplicationData(editingVisa.id, 'visaApplications', updatedData, true);
-
-            console.log('✅ Update completed successfully');
-
-            // VERIFICATION: Read back from Firestore
-            console.log('🔍 Verifying update...');
-            const { doc: firestoreDoc, getDoc } = await import('firebase/firestore');
-            const docRef = firestoreDoc(db, 'visaApplications', editingVisa.id);
-            const verifySnap = await getDoc(docRef);
-            const verifyData = verifySnap.data();
-
-            console.log('📊 VERIFICATION RESULTS:', {
-                editApproved: verifyData.editApproved,
-                userConfirmed: verifyData.userConfirmed,
-                userConfirmedAt: verifyData.userConfirmedAt,
-                hasEditHistory: !!verifyData.editHistory
+            // Clear only the files that were just uploaded — if other
+            // requested documents are still pending, the modal stays open
+            // and (thanks to the realtime listener) will re-filter itself
+            // down to just what's left.
+            setFileInputs((prev) => {
+                const next = { ...prev };
+                uploadedKeys.forEach((key) => delete next[key]);
+                return next;
             });
 
-            if (verifyData.editApproved !== false) {
-                console.error('⚠️ WARNING: editApproved is NOT false!');
+            const remainingPending = Object.entries(editingVisa.editApprovedDocs || {})
+                .some(([key, val]) => val && !uploadedKeys.includes(key));
+
+            if (remainingPending) {
+                notify.info('Saved! Other requested documents are still pending — keep going.');
             } else {
-                console.log('✅ editApproved = false (correct)');
+                notify.success('Application updated successfully. Edit access is now locked.');
+                setEditingVisa(null);
             }
-
-            if (verifyData.userConfirmed !== true) {
-                console.error('⚠️ WARNING: userConfirmed is NOT true!');
-            } else {
-                console.log('✅ userConfirmed = true (correct)');
-            }
-
-            alert('✅ Visa application updated successfully!\n\nYour changes have been submitted for review.\nEdit access has been automatically locked.\n\nThe page will reload in 2 seconds.');
-
-            console.log('⏳ Waiting 2 seconds before reload...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            setEditingVisa(null);
-            console.log('🔄 Reloading page...');
-            window.location.reload();
         } catch (error) {
-            console.error("❌ Update error:", error);
-            console.error('Error details:', {
-                message: error.message,
-                code: error.code,
-                stack: error.stack
-            });
-            alert('Failed to update visa application: ' + error.message);
+            console.error("Update error:", error);
+            notify.error('Failed to update visa application: ' + error.message);
         } finally {
             setSaving(false);
             setUploadingFiles(false);
@@ -450,11 +401,15 @@ const UserDashboard = () => {
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-900">{visa.applicantName || 'N/A'}</div>
                                                     <div className="text-sm text-slate-500">{visa.email}</div>
-                                                    {/* Admin Message Indicator */}
-                                                    {visa.adminMessage && (
-                                                        <div className="mt-1 flex items-center gap-1 text-xs text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-200 w-fit">
+                                                    {/* Admin Message Indicator — only shown until the user dismisses this exact message */}
+                                                    {hasUnseenMessage(visa) && (
+                                                        <button
+                                                            onClick={() => markMessageSeen(visa.id, 'visaApplications', visa.adminMessageAt || null)}
+                                                            title="Click to dismiss"
+                                                            className="mt-1 flex items-center gap-1 text-xs text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-200 w-fit hover:bg-amber-100 transition-colors"
+                                                        >
                                                             <HiChatAlt /> Msg from Admin
-                                                        </div>
+                                                        </button>
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4">
@@ -466,6 +421,17 @@ const UserDashboard = () => {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${getStatusBadge(visa.status)}`}>{visa.status || 'Pending'}</span>
+                                                    {visa.decisionDocURL && (
+                                                        <a
+                                                            href={visa.decisionDocURL}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="mt-1 flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 w-fit"
+                                                        >
+                                                            📄 {visa.status === 'Approve' ? 'Visa Letter' : visa.status === 'Reject' ? 'Rejection Letter' : 'Letter'}
+                                                        </a>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
@@ -474,6 +440,12 @@ const UserDashboard = () => {
                                                             className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold"
                                                         >
                                                             <HiEye className="w-4 h-4" /> View
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setInvoiceRecord({ record: visa, recordType: 'visa' })}
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-xs font-bold"
+                                                        >
+                                                            <HiReceiptTax className="w-4 h-4" /> Invoice
                                                         </button>
                                                         {visa.editApproved && (
                                                             <button
@@ -516,6 +488,7 @@ const UserDashboard = () => {
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                                         <button onClick={() => setViewingPolicy(policy)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><HiEye className="w-5 h-5" /></button>
+                                                        <button onClick={() => setInvoiceRecord({ record: policy, recordType: 'insurance' })} className="p-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100"><HiReceiptTax className="w-5 h-5" /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -568,15 +541,51 @@ const UserDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* ADMIN MESSAGE ALERT */}
-                            {viewingVisa.adminMessage && (
+                            {/* DECISION LETTER — approval or rejection document attached by admin */}
+                            {viewingVisa.decisionDocURL && (
+                                <div className={`mx-8 mt-6 p-5 rounded-xl shadow-sm border-l-4 flex items-center justify-between gap-4 ${
+                                    viewingVisa.status === 'Approve'
+                                        ? 'bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-500'
+                                        : viewingVisa.status === 'Reject'
+                                        ? 'bg-gradient-to-r from-red-50 to-rose-50 border-red-500'
+                                        : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-500'
+                                }`}>
+                                    <div>
+                                        <h3 className={`font-bold text-lg ${viewingVisa.status === 'Approve' ? 'text-emerald-900' : viewingVisa.status === 'Reject' ? 'text-red-900' : 'text-blue-900'}`}>
+                                            {viewingVisa.status === 'Approve' ? '✅ Approved Visa Letter' : viewingVisa.status === 'Reject' ? '❌ Rejection Letter' : '📄 Decision Document'}
+                                        </h3>
+                                        <p className="text-sm text-slate-600 mt-1">{viewingVisa.decisionDocName || 'Document attached by admin'}</p>
+                                    </div>
+                                    <a
+                                        href={viewingVisa.decisionDocURL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm text-white shadow-lg transition-all ${
+                                            viewingVisa.status === 'Approve' ? 'bg-emerald-600 hover:bg-emerald-700' : viewingVisa.status === 'Reject' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                                        }`}
+                                    >
+                                        Download
+                                    </a>
+                                </div>
+                            )}
+
+                            {/* ADMIN MESSAGE ALERT — shown only until dismissed/seen once, then gone for good */}
+                            {hasUnseenMessage(viewingVisa) && (
                                 <div className="mx-8 mt-6 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 p-5 rounded-r-xl shadow-sm">
                                     <div className="flex items-start gap-4">
                                         <div className="bg-amber-500 p-2 rounded-lg shrink-0">
                                             <HiChatAlt className="text-xl text-white" />
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="font-bold text-amber-900 text-lg">Message from Admin</h3>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <h3 className="font-bold text-amber-900 text-lg">Message from Admin</h3>
+                                                <button
+                                                    onClick={() => markMessageSeen(viewingVisa.id, 'visaApplications', viewingVisa.adminMessageAt || null)}
+                                                    className="text-xs font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 shrink-0"
+                                                >
+                                                    Dismiss
+                                                </button>
+                                            </div>
                                             <p className="text-amber-800 mt-2 leading-relaxed">{viewingVisa.adminMessage}</p>
                                             <p className="text-xs text-amber-600/70 mt-3 flex items-center gap-1">
                                                 <span className="w-1.5 h-1.5 bg-amber-600/70 rounded-full"></span>
@@ -615,6 +624,10 @@ const UserDashboard = () => {
                                                     <div className="border-t border-slate-200 pt-4">
                                                         <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">CNIC</p>
                                                         <p className="text-sm font-mono font-medium text-slate-700">{viewingVisa.cnic || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="border-t border-slate-200 pt-4">
+                                                        <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Age</p>
+                                                        <p className="text-sm font-medium text-slate-700">{viewingVisa.age || 'N/A'}</p>
                                                     </div>
                                                     <div className="border-t border-slate-200 pt-4">
                                                         <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Passport Number</p>
@@ -724,15 +737,23 @@ const UserDashboard = () => {
                             </div>
                         </div>
 
-                        {/* ADMIN MESSAGE ALERT in Edit Modal */}
-                        {editingVisa.adminMessage && (
+                        {/* ADMIN MESSAGE ALERT in Edit Modal — disappears once dismissed, never resurfaces for the same message */}
+                        {hasUnseenMessage(editingVisa) && (
                             <div className="mx-8 mt-6 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 p-5 rounded-r-xl shadow-sm">
                                 <div className="flex items-start gap-4">
                                     <div className="bg-amber-500 p-2 rounded-lg shrink-0">
                                         <HiChatAlt className="text-xl text-white" />
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="font-bold text-amber-900 text-lg">Action Required from Admin</h3>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <h3 className="font-bold text-amber-900 text-lg">Action Required from Admin</h3>
+                                            <button
+                                                onClick={() => markMessageSeen(editingVisa.id, 'visaApplications', editingVisa.adminMessageAt || null)}
+                                                className="text-xs font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 shrink-0"
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
                                         <p className="text-amber-800 mt-2 leading-relaxed">{editingVisa.adminMessage}</p>
                                         <p className="text-xs text-amber-600/70 mt-3">Please update the requested information below</p>
                                     </div>
@@ -740,172 +761,76 @@ const UserDashboard = () => {
                             </div>
                         )}
 
-                        {/* Scrollable Content */}
+                        {/* Scrollable Content — only the document(s) admin flagged for
+                            re-upload are shown. No text fields, no locked/verified
+                            docs — nothing extra. */}
                         <div className="overflow-y-auto flex-1 p-8">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                {/* Left Column: Text Inputs */}
-                                <div className="space-y-6">
-                                    <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                            <div className="w-8 h-0.5 bg-emerald-500"></div>
-                                            Application Details
-                                        </h3>
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Destination Country</label>
-                                                <select
-                                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all bg-white"
-                                                    value={editFormData.country || ''}
-                                                    onChange={e => {
-                                                        const newCountry = e.target.value;
-                                                        setEditFormData(prev => ({
-                                                            ...prev,
-                                                            country: newCountry,
-                                                            visaType: '' // Reset visa type when country changes
-                                                        }));
-                                                    }}
-                                                >
-                                                    <option value="">Select Country</option>
-                                                    {availableCountries.map(c => (
-                                                        <option key={c.key} value={c.key}>{c.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Visa Type</label>
-                                                <select
-                                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all bg-white"
-                                                    value={editFormData.visaType || ''}
-                                                    onChange={e => setEditFormData({ ...editFormData, visaType: e.target.value })}
-                                                    disabled={!editFormData.country}
-                                                >
-                                                    <option value="">Select Visa Type</option>
-                                                    {availableVisaTypes.map((vt, idx) => (
-                                                        <option key={idx} value={vt.type}>{vt.type} ({vt.category})</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Applicant Name</label>
-                                                <input
-                                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                                                    value={editFormData.applicantName || ''}
-                                                    onChange={e => setEditFormData({ ...editFormData, applicantName: e.target.value })}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Phone Number</label>
-                                                <input
-                                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                                                    value={editFormData.phone || ''}
-                                                    onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Email Address</label>
-                                                <input
-                                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                                                    value={editFormData.email || ''}
-                                                    onChange={e => setEditFormData({ ...editFormData, email: e.target.value })}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">CNIC</label>
-                                                <input
-                                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-mono"
-                                                    value={editFormData.cnic || ''}
-                                                    onChange={e => setEditFormData({ ...editFormData, cnic: e.target.value })}
-                                                />
-                                            </div>
+                            {(() => {
+                                const allDocs = [
+                                    { key: 'personalPhoto', label: 'Personal Photo' },
+                                    { key: 'passport', label: 'Passport' },
+                                    { key: 'cnicFront', label: 'CNIC Front' },
+                                    { key: 'cnicBack', label: 'CNIC Back' },
+                                    { key: 'bankStatement', label: 'Bank Statement' },
+                                    { key: 'nicScan', label: 'NIC Scan' },
+                                    { key: 'bForm', label: 'B-Form' },
+                                    { key: 'frc', label: 'FRC' }
+                                ];
+                                const editApprovedDocs = editingVisa.editApprovedDocs || {};
+                                // Only docs the admin has explicitly flagged for re-upload
+                                // (via the "Re-upload" action) show up here.
+                                const editableDocs = allDocs.filter(d => !!editApprovedDocs[d.key]);
+
+                                if (editableDocs.length === 0) {
+                                    return (
+                                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                                            <HiDocument className="w-10 h-10 text-slate-300 mb-3" />
+                                            <p className="text-slate-500 font-medium">No documents are open for re-upload right now.</p>
+                                            <p className="text-slate-400 text-sm mt-1">Your admin will flag a document if one needs to be re-uploaded.</p>
                                         </div>
-                                    </div>
-                                </div>
+                                    );
+                                }
 
-                                {/* Right Column: Document Uploads */}
-                                <div className="space-y-4">
-                                    <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                            <div className="w-8 h-0.5 bg-purple-500"></div>
-                                            Documents
-                                        </h3>
-                                        <div className="space-y-3">
-                                            {[
-                                                { key: 'personalPhoto', label: 'Personal Photo' },
-                                                { key: 'passport', label: 'Passport' },
-                                                { key: 'cnicFront', label: 'CNIC Front' },
-                                                { key: 'cnicBack', label: 'CNIC Back' },
-                                                { key: 'bankStatement', label: 'Bank Statement' },
-                                                { key: 'nicScan', label: 'NIC Scan' },
-                                                { key: 'bForm', label: 'B-Form' },
-                                                { key: 'frc', label: 'FRC' }
-                                            ].map(doc => {
-                                                const isVerified = editingVisa.documentVerification?.[doc.key];
-                                                const hasDocument = editingVisa.documentURLs?.[doc.key];
-                                                // Per-doc edit permission: if editApprovedDocs map exists, use it; otherwise fall back to global editApproved
-                                                const editApprovedDocs = editingVisa.editApprovedDocs || {};
-                                                const hasPerDocMap = Object.keys(editApprovedDocs).length > 0;
-                                                const canEditThisDoc = isVerified ? false : (hasPerDocMap ? !!editApprovedDocs[doc.key] : true);
-
-                                                return (
-                                                    <div key={doc.key} className={`rounded-lg border p-4 transition-all ${isVerified ? 'bg-emerald-50 border-emerald-300' : canEditThisDoc ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200 opacity-70'}`}>
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">{doc.label}</label>
-                                                            {isVerified && (
-                                                                <span className="bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                                                                    ✓ Verified
-                                                                </span>
-                                                            )}
-                                                            {!isVerified && !canEditThisDoc && (
-                                                                <span className="bg-slate-200 text-slate-500 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                                                                    🔒 Locked
-                                                                </span>
-                                                            )}
-                                                        </div>
-
-                                                        {isVerified ? (
-                                                            <div className="flex items-center gap-2 text-sm text-emerald-700">
-                                                                <HiDocument className="w-4 h-4" />
-                                                                <span className="font-medium">Document verified by admin</span>
-                                                            </div>
-                                                        ) : !canEditThisDoc ? (
-                                                            <div className="flex items-center gap-2 text-sm text-slate-400">
-                                                                <HiDocument className="w-4 h-4" />
-                                                                <span className="font-medium">{hasDocument ? 'Upload locked by admin' : 'Not uploaded — locked'}</span>
-                                                            </div>
-                                                        ) : (
-                                                            <>
-                                                                <input
-                                                                    type="file"
-                                                                    onChange={(e) => handleFileSelect(doc.key, e)}
-                                                                    className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-500 file:text-white hover:file:bg-emerald-600 file:cursor-pointer file:transition-colors"
-                                                                    accept="image/*,.pdf"
-                                                                />
-                                                                {fileInputs[doc.key] && (
-                                                                    <p className="text-xs text-emerald-600 mt-2 font-medium flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full"></span>
-                                                                        New file selected: {fileInputs[doc.key].name}
-                                                                    </p>
-                                                                )}
-                                                                {!fileInputs[doc.key] && hasDocument && (
-                                                                    <p className="text-xs text-amber-600 mt-2 font-medium">
-                                                                        ⚠ Not verified - please re-upload
-                                                                    </p>
-                                                                )}
-                                                            </>
-                                                        )}
+                                return (
+                                    <div className="max-w-xl mx-auto space-y-4">
+                                        {editableDocs.map(docItem => {
+                                            const hasDocument = editingVisa.documentURLs?.[docItem.key];
+                                            return (
+                                                <div key={docItem.key} className="rounded-lg border p-4 bg-white border-slate-200">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">{docItem.label}</label>
+                                                        <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                                                            ⚠ Re-upload Requested
+                                                        </span>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
+                                                    <input
+                                                        type="file"
+                                                        onChange={(e) => handleFileSelect(docItem.key, e)}
+                                                        className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-500 file:text-white hover:file:bg-emerald-600 file:cursor-pointer file:transition-colors"
+                                                        accept="image/*,.pdf"
+                                                    />
+                                                    {fileInputs[docItem.key] ? (
+                                                        <p className="text-xs text-emerald-600 mt-2 font-medium flex items-center gap-1">
+                                                            <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full"></span>
+                                                            New file selected: {fileInputs[docItem.key].name}
+                                                        </p>
+                                                    ) : hasDocument ? (
+                                                        <p className="text-xs text-amber-600 mt-2 font-medium">
+                                                            ⚠ Current file is not valid/clear - please re-upload
+                                                        </p>
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                </div>
-                            </div>
+                                );
+                            })()}
                         </div>
 
                         {/* Footer Actions */}
                         <div className="border-t border-slate-200 px-8 py-5 bg-slate-50 flex items-center justify-between">
                             <p className="text-sm text-slate-500">
-                                <span className="font-medium text-emerald-600">Tip:</span> Only unverified documents can be updated
+                                <span className="font-medium text-emerald-600">Tip:</span> Only documents flagged for re-upload above can be updated
                             </p>
                             <div className="flex gap-3">
                                 <button
@@ -958,6 +883,16 @@ const UserDashboard = () => {
                     </div>
                 )
             }
+
+            {invoiceRecord && (
+                <InvoiceModal
+                    record={invoiceRecord.record}
+                    recordType={invoiceRecord.recordType}
+                    onClose={() => setInvoiceRecord(null)}
+                />
+            )}
+
+            <ToastContainer />
         </div >
     );
 };

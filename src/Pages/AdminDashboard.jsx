@@ -10,10 +10,10 @@ import {
     MdLogin, MdPersonAdd, MdPhone, MdEmail, MdHotel, MdAirplaneTicket,
     MdDirectionsBus, MdPerson, MdCalendarToday, MdSubject, MdChat,
     MdAdminPanelSettings, MdVerifiedUser, MdShield, MdDelete, MdEdit,
-    MdMoreVert, MdFilterList, MdOpenInNew, MdSave
+    MdMoreVert, MdFilterList, MdOpenInNew, MdSave, MdAttachFile
 } from "react-icons/md";
 import { FaUserShield, FaKaaba, FaPassport, FaRegPaperPlane, FaUsersCog, FaMosque, FaBed, FaCar, FaEnvelope } from "react-icons/fa";
-import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, signOut } from "../firbase";
 import { useAuth } from "../Context/AuthContext";
@@ -29,7 +29,7 @@ import VisaAnalytics from "../Components/VisaAnalytics";
 import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
 import EditHistoryModal from "../Components/EditHistoryModal";
-import { toggleEditApproval, saveAdminMessage } from "../Utils/ApplicationEditUtils";
+import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter } from "../Utils/ApplicationEditUtils";
 import { sendUmrahStatusEmail, sendUmrahMessageEmail, sendConsolidatedUpdateEmail } from "../Utils/emailService";
 import ToastContainer, { notify } from "../Components/Toast";
 
@@ -831,22 +831,36 @@ export default function AdminDashboard() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const fetchData = async () => {
+        // Realtime listener for visa applications — reflects user uploads/reuploads
+        // instantly without needing a page refresh.
+        const visasUnsub = onSnapshot(
+            query(collection(db, "visaApplications"), orderBy("applicationDate", "desc")),
+            (snap) => {
+                const visasData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setVisas(visasData);
+                // Keep an open Document Viewer in sync too, so a user's
+                // re-upload shows up instantly without closing/reopening it.
+                setSelectedDoc(prev => prev ? (visasData.find(v => v.id === prev.id) || prev) : prev);
+                setLoading(false);
+            },
+            (e) => { console.error("visas onSnapshot error:", e); setLoading(false); }
+        );
+
+        const fetchRest = async () => {
             try {
-                const [v, p, m, i] = await Promise.all([
-                    getDocs(query(collection(db, "visaApplications"), orderBy("applicationDate", "desc"))),
+                const [p, m, i] = await Promise.all([
                     getDocs(query(collection(db, "insurancesCustumer"), orderBy("purchaseDate", "desc"))),
                     getDocs(query(collection(db, "contact_messages"), orderBy("createdAt", "desc"))),
                     getDocs(query(collection(db, "umardet"), orderBy("createdAt", "desc")))
                 ]);
-                setVisas(v.docs.map(d => ({ id: d.id, ...d.data() })));
                 setPolicies(p.docs.map(d => ({ id: d.id, ...d.data() })));
                 setMessages(m.docs.map(d => ({ id: d.id, ...d.data() })));
                 setInquiries(i.docs.map(d => ({ id: d.id, ...d.data() })));
             } catch (e) { console.error(e); }
-            setLoading(false);
         };
-        fetchData();
+        fetchRest();
+
+        return () => visasUnsub();
     }, []);
 
     const updateLocal = (type, id, updates) => {
@@ -909,20 +923,10 @@ export default function AdminDashboard() {
         if (decisionFile) {
             try {
                 notify.success("Uploading decision letter...");
-                const ext = decisionFile.name.split('.').pop();
                 const newStatus = pending.statusChange?.newStatus;
-                const folder = newStatus === 'Approve' ? 'approved' : newStatus === 'Reject' ? 'rejected' : 'decision';
-                const path = `visa_decisions/${visaItem.id}/${folder}_${Date.now()}.${ext}`;
-                const fileRef = storageRef(storage, path);
-                await uploadBytes(fileRef, decisionFile);
-                decisionDocURL = await getDownloadURL(fileRef);
-                decisionDocName = decisionFile.name;
-                // Save URL to Firestore so DocumentViewer can show it
-                await updateDoc(doc(db, "visaApplications", visaItem.id), {
-                    decisionDocURL,
-                    decisionDocName,
-                    updatedAt: serverTimestamp(),
-                });
+                const uploaded = await uploadDecisionLetter(decisionFile, visaItem.id, "visaApplications", newStatus);
+                decisionDocURL = uploaded.decisionDocURL;
+                decisionDocName = uploaded.decisionDocName;
                 // Clear from local state
                 setDecisionDocs(prev => { const n = { ...prev }; delete n[visaItem.id]; return n; });
             } catch (uploadErr) {
@@ -1805,20 +1809,26 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                         </p>
                     </div>
                 ) : (
-                    paginatedVisas.map(v => (
+                    paginatedVisas.map(v => {
+                        const hasResubmission = Object.keys(v.resubmittedDocs || {}).length > 0;
+                        return (
                         <motion.div
                             key={v.id}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.22 }}
-                            className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5 md:p-6 grid gap-4 md:grid-cols-[2.4fr_1fr_1fr_0.9fr] items-center"
+                            className={`bg-white rounded-3xl border shadow-sm p-5 md:p-6 grid gap-4 md:grid-cols-[2.4fr_1fr_1fr_0.9fr] items-center ${
+                                hasResubmission ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200'
+                            }`}
                         >
                             <div className="flex items-start gap-4">
                                 <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-orange-600 text-2xl font-black shadow-sm">
                                     {v.applicantName?.charAt(0).toUpperCase() || "A"}
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-lg font-bold text-slate-900 truncate">{v.applicantName}</p>
+                                    <p className={`text-lg truncate ${hasResubmission ? 'font-black text-blue-700' : 'font-bold text-slate-900'}`}>
+                                        {v.applicantName}
+                                    </p>
                                     <p className="text-sm text-slate-500 truncate">{v.email}</p>
                                     <div className="mt-3 flex flex-wrap items-center gap-2">
                                         <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 text-orange-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] border border-orange-100">
@@ -1829,21 +1839,64 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                             <span className="w-2 h-2 rounded-full bg-slate-400" />
                                             {v.visaType}
                                         </span>
+                                        {hasResubmission && (
+                                            <button
+                                                type="button"
+                                                title="Click to dismiss"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    dismissResubmissionHighlight(v.id, 'visaApplications');
+                                                }}
+                                                className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.1em] border border-blue-300 hover:bg-blue-200 transition-colors cursor-pointer"
+                                            >
+                                                📤 Re-uploaded — Review ✕
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
                             <div className="space-y-2">
                                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Status</div>
-                                <StatusDropdown
-                                    id={v.id}
-                                    currentStatus={v.status}
-                                    collectionName="visaApplications"
-                                    onUpdate={(id, up) => updateLocal('visa', id, up)}
-                                    isVisa
-                                    applicant={v}
-                                    onStage={onStage}
-                                />
+                                <div className="flex items-center gap-2">
+                                    {(pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || pendingChanges[v.id]?.statusChange?.newStatus === 'Reject' || v.status === 'Approve' || v.status === 'Reject') && (
+                                        <label
+                                            className={`shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-all shadow-sm ${
+                                                decisionDocs[v.id] || v.decisionDocURL
+                                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                                    : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                            }`}
+                                            title={
+                                                decisionDocs[v.id]
+                                                    ? `Ready to upload: ${decisionDocs[v.id].name} (click to replace)`
+                                                    : v.decisionDocURL
+                                                    ? 'Letter attached — click to replace'
+                                                    : (pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve') ? 'Attach visa letter' : 'Attach rejection letter'
+                                            }
+                                        >
+                                            {decisionDocs[v.id] || v.decisionDocURL ? <MdCheckCircle className="text-lg" /> : <MdAttachFile className="text-lg" />}
+                                            <input
+                                                type="file"
+                                                accept="image/jpeg,image/png"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) setDecisionDocs(prev => ({ ...prev, [v.id]: file }));
+                                                    e.target.value = '';
+                                                }}
+                                            />
+                                        </label>
+                                    )}
+                                    <StatusDropdown
+                                        id={v.id}
+                                        currentStatus={v.status}
+                                        collectionName="visaApplications"
+                                        onUpdate={(id, up) => updateLocal('visa', id, up)}
+                                        isVisa
+                                        applicant={v}
+                                        onStage={onStage}
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-2">
@@ -1856,38 +1909,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                 />
                             </div>
 
-                            <div className="flex flex-col items-end justify-between gap-3">
-                                {/* Decision letter upload — shown when Approve or Reject is staged */}
-                                {(pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || pendingChanges[v.id]?.statusChange?.newStatus === 'Reject' || v.status === 'Approve' || v.status === 'Reject') && (
-                                    <div className={`w-full rounded-xl border p-2.5 ${pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
-                                            📎 {pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve' ? 'Attach Visa Letter' : 'Attach Rejection Letter'} <span className="font-normal text-slate-400">(optional)</span>
-                                        </p>
-                                        {decisionDocs[v.id] ? (
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[11px] text-emerald-700 font-medium truncate max-w-[120px]">{decisionDocs[v.id].name}</span>
-                                                <button onClick={() => setDecisionDocs(prev => { const n={...prev}; delete n[v.id]; return n; })} className="text-red-400 hover:text-red-600 text-xs font-bold">✕</button>
-                                            </div>
-                                        ) : (
-                                            <label className="cursor-pointer">
-                                                <span className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline underline-offset-2">Choose file…</span>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*,.pdf"
-                                                    className="hidden"
-                                                    onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) setDecisionDocs(prev => ({ ...prev, [v.id]: file }));
-                                                        e.target.value = '';
-                                                    }}
-                                                />
-                                            </label>
-                                        )}
-                                        {v.decisionDocURL && !decisionDocs[v.id] && (
-                                            <a href={v.decisionDocURL} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline block mt-1">📄 View existing letter</a>
-                                        )}
-                                    </div>
-                                )}
+                            <div className="flex flex-col items-end justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => setSelectedDoc(v)}
@@ -1933,7 +1955,8 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                 </span>
                             </div>
                         </motion.div>
-                    ))
+                        );
+                    })
                 )}
             </div>
             <Pagination total={filtered.length} page={page} onChange={setPage} />

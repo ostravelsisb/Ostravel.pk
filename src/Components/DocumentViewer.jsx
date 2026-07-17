@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { MdClose, MdZoomIn, MdZoomOut, MdRefresh, MdDownload, MdCheckCircle, MdErrorOutline, MdDelete, MdWarning, MdLockOpen, MdLockOutline } from 'react-icons/md';
+import { MdClose, MdZoomIn, MdZoomOut, MdRefresh, MdDownload, MdCheckCircle, MdErrorOutline, MdDelete, MdWarning, MdLockOpen } from 'react-icons/md';
 import { FaPassport } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ref, listAll, getDownloadURL, deleteObject } from "firebase/storage";
@@ -22,27 +22,22 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
     
     // Refresh trigger for document list
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    // Per-doc edit access is now fully automated: requesting a re-upload grants
+    // access to that specific doc, nothing else. This just mirrors live state
+    // for the "Edit Access Given" badge — there is no manual toggle anymore.
     const [editApprovedDocs, setEditApprovedDocs] = useState(visa.editApprovedDocs || {});
-    const [togglingDoc, setTogglingDoc] = useState(null);
+    // Per-doc flag set the moment the user re-uploads a requested document —
+    // shows "RE-UPLOADED — PENDING REVIEW" and stays locked until admin acts again.
+    const [resubmittedDocs, setResubmittedDocs] = useState(visa.resubmittedDocs || {});
 
-    const handleToggleDocEdit = async (docKey) => {
-        const newVal = !editApprovedDocs[docKey];
-        setTogglingDoc(docKey);
-        try {
-            const newEditApprovedDocs = { ...editApprovedDocs, [docKey]: newVal };
-            await updateDoc(doc(db, "visaApplications", visa.id), {
-                editApprovedDocs: newEditApprovedDocs,
-                updatedAt: serverTimestamp()
-            });
-            setEditApprovedDocs(newEditApprovedDocs);
-            if (onStage) {
-                onStage({ editApprovedDocs: newEditApprovedDocs });
-            }
-        } catch (e) {
-            notify.error("Toggle failed");
-        }
-        setTogglingDoc(null);
-    };
+    // Keep local state in sync with the live `visa` prop. The parent dashboard's
+    // onSnapshot listener passes a fresh object down whenever Firestore changes,
+    // so the viewer updates automatically — no reopen/refresh needed.
+    useEffect(() => {
+        setVerifiedDocs(visa.documentVerification || {});
+        setEditApprovedDocs(visa.editApprovedDocs || {});
+        setResubmittedDocs(visa.resubmittedDocs || {});
+    }, [visa.id, visa.documentVerification, visa.editApprovedDocs, visa.resubmittedDocs]);
 
     useEffect(() => {
         const fetchStorageDocs = async () => {
@@ -105,6 +100,16 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
         };
         setVerifiedDocs(newVerifiedDocs);
         if (onVerifyDocument) onVerifyDocument(visa.id, newVerifiedDocs);
+
+        // Verifying a document closes out its "re-uploaded, pending review" state.
+        if (isNowVerified && resubmittedDocs[docKey]) {
+            const newResubmittedDocs = { ...resubmittedDocs };
+            delete newResubmittedDocs[docKey];
+            setResubmittedDocs(newResubmittedDocs);
+            updateDoc(doc(db, "visaApplications", visa.id), { resubmittedDocs: newResubmittedDocs }).catch(
+                (err) => console.error('Error clearing resubmitted flag:', err)
+            );
+        }
 
         // Only stage for email when marking as verified (not when un-verifying).
         // Actual send happens once, later, from the row's Save button.
@@ -194,12 +199,14 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
         }
     };
 
-    const handleRequestReupload = (docKey, docLabel) => {
-        setReuploadModal({ 
-            isOpen: true, 
-            docKey, 
-            docLabel, 
-            message: `Please re-upload your ${docLabel}. The current document is not clear/valid.` 
+    const handleRequestReupload = (docKey, docLabel, isUploaded = true) => {
+        setReuploadModal({
+            isOpen: true,
+            docKey,
+            docLabel,
+            message: isUploaded
+                ? `Please re-upload your ${docLabel}. The current document is not clear/valid.`
+                : `Please upload your ${docLabel}.`
         });
     };
 
@@ -220,16 +227,32 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                 [docKey]: false
             };
 
+            // Automatically grant edit access to ONLY this specific document.
+            // No separate "enable edit" step needed — requesting a re-upload
+            // is itself the access grant.
+            const updatedEditApprovedDocs = {
+                ...editApprovedDocs,
+                [docKey]: true
+            };
+
+            // A fresh request starts a new cycle — clear any stale
+            // "re-uploaded, pending review" flag from a previous round.
+            const updatedResubmittedDocs = { ...resubmittedDocs };
+            delete updatedResubmittedDocs[docKey];
+
             await updateDoc(doc(db, "visaApplications", visa.id), {
                 documentVerification: updatedVerification,
+                editApprovedDocs: updatedEditApprovedDocs,
+                resubmittedDocs: updatedResubmittedDocs,
                 adminMessage: message,
                 adminMessageAt: serverTimestamp(),
-                editApproved: true,
+                editApproved: true, // legacy global flag kept in sync for old checks
                 updatedAt: serverTimestamp()
             });
 
             if (onStage) {
                 onStage({
+                    editApprovedDocs: updatedEditApprovedDocs,
                     documentActions: [{
                         docLabel,
                         action: 'reupload_requested',
@@ -239,6 +262,8 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
             }
 
             setVerifiedDocs(updatedVerification);
+            setEditApprovedDocs(updatedEditApprovedDocs);
+            setResubmittedDocs(updatedResubmittedDocs);
             setRefreshTrigger(prev => prev + 1);
 
             setTimeout(() => {
@@ -364,7 +389,7 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                         const isVerified = verifiedDocs[docItem.key];
                                         const isUploaded = !!(activeURLs && activeURLs[docItem.key]);
                                         const isDocEditEnabled = !!editApprovedDocs[docItem.key];
-                                        const isTogglingThis = togglingDoc === docItem.key;
+                                        const isResubmitted = !!resubmittedDocs[docItem.key];
 
                                         return (
                                             <motion.div
@@ -404,31 +429,33 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                                     </div>
                                                 </div>
 
-                                                {/* Per-doc Edit Toggle */}
-                                                <div className="px-4 pb-2">
-                                                    <motion.button
-                                                        whileHover={{ scale: 1.01 }}
-                                                        whileTap={{ scale: 0.99 }}
-                                                        onClick={(e) => { e.stopPropagation(); handleToggleDocEdit(docItem.key); }}
-                                                        disabled={isTogglingThis}
-                                                        className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-200 ${
-                                                            isDocEditEnabled
-                                                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 hover:bg-emerald-200'
-                                                                : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
-                                                        } ${isTogglingThis ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                    >
-                                                        {isTogglingThis ? (
-                                                            <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                                        ) : isDocEditEnabled ? (
-                                                            <><MdLockOpen className="text-sm" /> EDIT ENABLED</>
-                                                        ) : (
-                                                            <><MdLockOutline className="text-sm" /> EDIT LOCKED</>
-                                                        )}
-                                                    </motion.button>
-                                                </div>
+                                                {/* Edit-access badge — auto-derived, read only. Access is granted
+                                                    automatically the moment "Re-upload"/"Request Upload" is clicked below;
+                                                    there is no manual enable/lock step. Disappears the instant the
+                                                    user re-uploads (editApprovedDocs flips false), replaced below by
+                                                    the "pending review" badge. */}
+                                                {isDocEditEnabled && !isVerified && (
+                                                    <div className="px-4 pb-2">
+                                                        <div className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">
+                                                            <MdLockOpen className="text-sm" /> {isUploaded ? 'RE-UPLOAD REQUESTED' : 'UPLOAD REQUESTED'} — USER CAN EDIT
+                                                        </div>
+                                                    </div>
+                                                )}
 
-                                                {/* Action Buttons — only for uploaded docs */}
-                                                {isUploaded && (
+                                                {/* Shown once the user has re-uploaded this doc: edit is locked
+                                                    again and it's waiting on admin review. */}
+                                                {!isDocEditEnabled && isResubmitted && !isVerified && (
+                                                    <div className="px-4 pb-2">
+                                                        <div className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold bg-blue-100 text-blue-700 border border-blue-300">
+                                                            <MdCheckCircle className="text-sm" /> RE-UPLOADED — PENDING REVIEW
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Action Buttons — uploaded docs get Verify / Re-upload / Delete;
+                                                    not-yet-uploaded docs get a "Request Upload" option so admins
+                                                    don't have to wait for the user to upload first. */}
+                                                {isUploaded ? (
                                                 <div className="px-4 pb-3 flex gap-1.5">
                                                     <motion.button
                                                         whileHover={{ scale: 1.03 }}
@@ -446,7 +473,7 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                                     <motion.button
                                                         whileHover={{ scale: 1.03 }}
                                                         whileTap={{ scale: 0.97 }}
-                                                        onClick={(e) => { e.stopPropagation(); handleRequestReupload(docItem.key, docItem.label); }}
+                                                        onClick={(e) => { e.stopPropagation(); handleRequestReupload(docItem.key, docItem.label, true); }}
                                                         disabled={requesting === docItem.key}
                                                         className="flex-1 text-xs font-bold py-2 rounded-lg bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition-all duration-200 disabled:opacity-40"
                                                     >
@@ -461,6 +488,18 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                                         className="px-2.5 text-xs font-bold py-2 rounded-lg bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 transition-all duration-200 disabled:opacity-40"
                                                     >
                                                         {deleting === docItem.key ? '...' : <MdDelete className="text-sm" />}
+                                                    </motion.button>
+                                                </div>
+                                                ) : (
+                                                <div className="px-4 pb-3">
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.02 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                        onClick={(e) => { e.stopPropagation(); handleRequestReupload(docItem.key, docItem.label, false); }}
+                                                        disabled={requesting === docItem.key || isDocEditEnabled}
+                                                        className="w-full text-xs font-bold py-2 rounded-lg bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition-all duration-200 disabled:opacity-40"
+                                                    >
+                                                        {requesting === docItem.key ? 'Sending...' : isDocEditEnabled ? 'Upload Requested ✓' : 'Request Upload'}
                                                     </motion.button>
                                                 </div>
                                                 )}

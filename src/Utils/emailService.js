@@ -209,3 +209,57 @@ export const sendConsolidatedUpdateEmail = async ({
         return { ok: false, error: err };
     }
 };
+
+// ─── NEW: invoice email (PDF attached) ───────────────────────────────────────
+// Fired right after a visa/insurance payment is saved to Firestore in
+// PaymentReturn.jsx. Backend builds a proper PDF invoice and attaches it.
+export const sendInvoiceEmail = async ({
+    to,
+    recordType,        // 'visa' | 'insurance'
+    invoiceNumber,
+    applicantName,
+    email,
+    phone,
+    country,
+    visaType,
+    planName,
+    amountPaid,
+    visaFee,
+    urgentFee,
+    urgentProcessing,
+    transactionId,
+    transactionRef,
+    paymentMethod,
+    paidAt,
+}) => {
+    if (!to) return { skipped: true };
+    try {
+        const res = await fetch(`${EMAIL_API_BASE}/invoice`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                to,
+                recordType,
+                invoiceNumber,
+                applicantName,
+                email,
+                phone,
+                country,
+                visaType,
+                planName,
+                amountPaid,
+                visaFee,
+                urgentFee,
+                urgentProcessing,
+                transactionId,
+                transactionRef,
+                paymentMethod,
+                paidAt,
+            }),
+        });
+        return { ok: res.ok };
+    } catch (err) {
+        console.error("Failed to send invoice email:", err);
+        return { ok: false, error: err };
+    }
+};

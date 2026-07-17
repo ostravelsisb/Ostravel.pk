@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../Context/AuthContext';
 import {
-    FaPassport, FaUser, FaEnvelope, FaPhone, FaFileUpload,
+    FaPassport, FaUser, FaEnvelope, FaPhone, FaFileUpload, FaIdCard,
     FaCheckCircle, FaExclamationCircle, FaGlobe, FaArrowRight, FaEye
 } from 'react-icons/fa';
 import { getAllCountryNames, getVisaDataByCountry, calculateTotalFee } from '../Data/visaData';
@@ -19,6 +19,9 @@ function ApplyVisa() {
         fullName: '',
         email: currentUser?.email || '',
         phone: '',
+        cnic: '',
+        age: '',
+        passportNumber: '',
         country: '',
         visaTypeIndex: 0,
         urgentProcessing: false
@@ -27,7 +30,7 @@ function ApplyVisa() {
     const [files, setFiles] = useState({
         personalPhoto: null, // First requirement
         cnicFront: null, cnicBack: null, bankStatement: null,
-        passport: null, nicScan: null
+        passport: null, nicScan: null, bForm: null, frc: null
     });
 
     const [uploadProgress, setUploadProgress] = useState({});
@@ -117,8 +120,11 @@ function ApplyVisa() {
         if (!formData.fullName.trim()) newErrors.fullName = 'Required';
         if (!formData.email.trim()) newErrors.email = 'Required';
         if (!formData.country) newErrors.country = 'Required';
+        if (!formData.cnic.trim()) newErrors.cnic = 'Required';
+        if (!formData.age.toString().trim()) newErrors.age = 'Required';
+        if (!formData.passportNumber.trim()) newErrors.passportNumber = 'Required';
 
-        const requiredFiles = ['personalPhoto', 'cnicFront', 'cnicBack', 'bankStatement', 'passport', 'nicScan'];
+        const requiredFiles = ['personalPhoto', 'cnicFront', 'cnicBack', 'bankStatement', 'passport', 'nicScan', 'bForm', 'frc'];
         requiredFiles.forEach(f => { if (!files[f]) newErrors[f] = 'Required'; });
 
         if (Object.keys(newErrors).length > 0) {
@@ -143,6 +149,9 @@ function ApplyVisa() {
                 applicantName: formData.fullName,
                 email: formData.email,
                 phone: formData.phone,
+                cnic: formData.cnic,
+                age: formData.age,
+                passportNumber: formData.passportNumber,
                 country: formData.country,
                 visaType: visaType.type,
                 totalFee,
@@ -202,9 +211,10 @@ function ApplyVisa() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <InputBox label="Full Name" name="fullName" icon={<FaUser />} value={formData.fullName} onChange={handleInputChange} error={errors.fullName} />
                         <InputBox label="Email Address" name="email" icon={<FaEnvelope />} value={formData.email} onChange={handleInputChange} error={errors.email} />
-                        <div className="md:col-span-2">
-                            <InputBox label="Phone Number" name="phone" icon={<FaPhone />} value={formData.phone} onChange={handleInputChange} error={errors.phone} />
-                        </div>
+                        <InputBox label="Phone Number" name="phone" icon={<FaPhone />} value={formData.phone} onChange={handleInputChange} error={errors.phone} />
+                        <InputBox label="CNIC (13 Digits, no dashes)" name="cnic" icon={<FaIdCard />} value={formData.cnic} onChange={handleInputChange} error={errors.cnic} />
+                        <InputBox label="Age" name="age" icon={<FaUser />} value={formData.age} onChange={handleInputChange} error={errors.age} type="number" />
+                        <InputBox label="Passport Number" name="passportNumber" icon={<FaPassport />} value={formData.passportNumber} onChange={handleInputChange} error={errors.passportNumber} />
                     </div>
 
                     {/* Document Uploads */}
@@ -249,6 +259,16 @@ function ApplyVisa() {
                                 file={files.nicScan} progress={uploadProgress.nicScan}
                                 error={errors.nicScan} onChange={(e) => handleFileChange(e, 'nicScan')}
                             />
+                            <FileUploadField
+                                name="bForm" label="B-Form"
+                                file={files.bForm} progress={uploadProgress.bForm}
+                                error={errors.bForm} onChange={(e) => handleFileChange(e, 'bForm')}
+                            />
+                            <FileUploadField
+                                name="frc" label="Family Registration Certificate (FRC)"
+                                file={files.frc} progress={uploadProgress.frc}
+                                error={errors.frc} onChange={(e) => handleFileChange(e, 'frc')}
+                            />
                         </div>
                     </div>
 
@@ -287,10 +307,11 @@ function ApplyVisa() {
     );
 }
 
-const InputBox = ({ label, name, icon, value, onChange, error }) => (
+const InputBox = ({ label, name, icon, value, onChange, error, type = 'text' }) => (
     <div className="space-y-2 text-left">
         <label className="block text-sm font-bold text-slate-700 flex items-center gap-2">{icon} {label}</label>
-        <input type="text" name={name} value={value} onChange={onChange} className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${error ? 'border-red-500' : 'border-slate-200'}`} />
+        <input type={type} name={name} value={value} onChange={onChange} className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${error ? 'border-red-500' : 'border-slate-200'}`} />
+        {error && <p className="text-[10px] text-red-600 font-bold">{error}</p>}
     </div>
 );
 

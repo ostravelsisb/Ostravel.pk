@@ -805,6 +805,7 @@ export default function AdminDashboard() {
     const [historyVisa, setHistoryVisa] = useState(null);
     const [visaQuickFilter, setVisaQuickFilter] = useState("");
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [showNotifDropdown, setShowNotifDropdown] = useState(false);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
     const notifRef = React.useRef(null);
@@ -1108,8 +1109,13 @@ export default function AdminDashboard() {
             <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
             <ToastContainer />
 
+            {/* ─── MOBILE SIDEBAR BACKDROP ─────────────────────────── */}
+            {mobileSidebarOpen && (
+                <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setMobileSidebarOpen(false)} />
+            )}
+
             {/* ─── SIDEBAR ─────────────────────────────────────────── */}
-            <aside className={`${sidebarCollapsed ? "w-[70px]" : "w-[200px]"} bg-white flex flex-col border-r border-gray-200 transition-all duration-300 shrink-0`} style={{ minHeight: "100vh" }}>
+            <aside className={`${sidebarCollapsed ? "lg:w-[70px]" : "lg:w-[200px]"} w-[220px] fixed lg:static inset-y-0 left-0 z-50 bg-white flex flex-col border-r border-gray-200 transition-all duration-300 shrink-0 ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`} style={{ minHeight: "100vh" }}>
                 <div className={`flex items-center gap-2 px-4 py-5 border-b border-gray-100 ${sidebarCollapsed ? "justify-center" : ""}`}>
                     <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-400 rounded-lg flex items-center justify-center shrink-0 shadow shadow-orange-200">
                         <FaUserShield className="text-white text-base" />
@@ -1130,7 +1136,7 @@ export default function AdminDashboard() {
                             return (
                                 <motion.button
                                     key={item.id}
-                                    onClick={() => setActiveTab(item.id)}
+                                    onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false); }}
                                     title={sidebarCollapsed ? item.label : ""}
                                     whileHover={{ x: sidebarCollapsed ? 0 : 3 }}
                                     whileTap={{ scale: 0.97 }}
@@ -1164,9 +1170,13 @@ export default function AdminDashboard() {
             <div className="flex-1 flex flex-col overflow-hidden">
 
                 {/* TOP BAR */}
-                <header className="h-[56px] bg-white border-b border-gray-200 flex items-center px-6 shrink-0">
+                <header className="h-[56px] bg-white border-b border-gray-200 flex items-center px-3 sm:px-6 shrink-0">
+                    <button onClick={() => setMobileSidebarOpen(p => !p)}
+                        className="w-8 h-8 flex lg:hidden items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors mr-2">
+                        <MdMenu className="text-xl" />
+                    </button>
                     <button onClick={() => setSidebarCollapsed(p => !p)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors mr-4">
+                        className="w-8 h-8 hidden lg:flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors mr-4">
                         <MdMenu className="text-xl" />
                     </button>
                     <div className="flex-1" />
@@ -1262,7 +1272,7 @@ export default function AdminDashboard() {
                 </header>
 
                 {/* ─── SCROLLABLE CONTENT ──────────────────────────── */}
-                <main className="flex-1 overflow-y-auto p-8 bg-[#f7f8fa]">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#f7f8fa]">
 
                     {/* Page heading */}
                     <motion.div

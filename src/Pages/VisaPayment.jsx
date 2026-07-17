@@ -17,7 +17,7 @@ export default function VisaPayment() {
     const [visaData, setVisaData] = useState(null);
 
     useEffect(() => {
-        const savedVisa = sessionStorage.getItem('pending_visa_application');
+        const savedVisa = localStorage.getItem('pending_visa_application');
 
         if (!savedVisa) {
             navigate('/apply-visa');

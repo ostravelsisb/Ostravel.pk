@@ -39,12 +39,68 @@ function ApplyVisa() {
     const [selectedCountryData, setSelectedCountryData] = useState(null);
     const [demoImage, setDemoImage] = useState(null); // Modal state for demo images
 
+    // URLs of documents already uploaded in a previous attempt (e.g. before a failed payment).
+    // Lets user skip re-uploading files that already made it to the cloud.
+    const [existingUrls, setExistingUrls] = useState({});
+
     const countries = getAllCountryNames();
+
+    // Restore any in-progress draft (typed fields) or a fully-uploaded pending application
+    // (e.g. user came back here after a failed payment) so nothing has to be re-typed or re-uploaded.
+    // Guards against the save-effect firing with the initial blank state before
+    // the restore-effect's setFormData has actually applied (which would overwrite
+    // the saved draft with blank data on every page load).
+    const hasRestoredRef = React.useRef(false);
 
     useEffect(() => {
         const storedCountry = sessionStorage.getItem('selected_visa_country');
-        if (storedCountry) setFormData(prev => ({ ...prev, country: storedCountry }));
+
+        const draftRaw = localStorage.getItem('visa_form_draft');
+        const pendingRaw = localStorage.getItem('pending_visa_application');
+
+        let restored = {};
+
+        if (pendingRaw) {
+            try {
+                const pending = JSON.parse(pendingRaw);
+                restored = {
+                    fullName: pending.applicantName || '',
+                    email: pending.email || '',
+                    phone: pending.phone || '',
+                    cnic: pending.cnic || '',
+                    age: pending.age || '',
+                    passportNumber: pending.passportNumber || '',
+                    country: pending.country || '',
+                    urgentProcessing: !!pending.urgentProcessing
+                };
+                if (pending.documentURLs) setExistingUrls(pending.documentURLs);
+            } catch { /* ignore bad json */ }
+        }
+
+        // Draft (saved on every keystroke) is fresher than a completed pending application,
+        // so let it override individual fields if present.
+        if (draftRaw) {
+            try {
+                restored = { ...restored, ...JSON.parse(draftRaw) };
+            } catch { /* ignore bad json */ }
+        }
+
+        if (storedCountry && !restored.country) restored.country = storedCountry;
+
+        if (Object.keys(restored).length > 0) {
+            setFormData(prev => ({ ...prev, ...restored }));
+        }
+
+        hasRestoredRef.current = true;
     }, []);
+
+    // Keep the draft saved on every change, so navigating away and back (or a page refresh)
+    // never loses what the user already typed. Skipped until restore above has actually run,
+    // otherwise this fires first (with the initial blank state) and clobbers the saved draft.
+    useEffect(() => {
+        if (!hasRestoredRef.current) return;
+        localStorage.setItem('visa_form_draft', JSON.stringify(formData));
+    }, [formData]);
 
     useEffect(() => {
         if (!currentUser) navigate('/login');
@@ -126,7 +182,8 @@ function ApplyVisa() {
         if (!formData.passportNumber.trim()) newErrors.passportNumber = 'Required';
 
         const requiredFiles = ['personalPhoto', 'cnicFront', 'cnicBack', 'bankStatement', 'passport', 'nicScan', 'bForm', 'frc'];
-        requiredFiles.forEach(f => { if (!files[f]) newErrors[f] = 'Required'; });
+        // A file is fine if freshly picked OR already uploaded in a previous attempt.
+        requiredFiles.forEach(f => { if (!files[f] && !existingUrls[f]) newErrors[f] = 'Required'; });
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
@@ -137,7 +194,9 @@ function ApplyVisa() {
         const appNumber = `VA-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
         try {
-            const urls = {};
+            // Start from any URLs already uploaded in a previous attempt, so we don't
+            // re-upload (and don't lose) files that already succeeded.
+            const urls = { ...existingUrls };
             await Promise.all(Object.entries(files).map(async ([key, file]) => {
                 if (file) urls[key] = await uploadFileToCloud(file, appNumber, key);
             }));
@@ -172,7 +231,7 @@ function ApplyVisa() {
                 category: visaType.category || ''
             };
 
-            sessionStorage.setItem('pending_visa_application', JSON.stringify(visaApplicationData));
+            localStorage.setItem('pending_visa_application', JSON.stringify(visaApplicationData));
             navigate('/visa-payment');
         } catch (error) {
             setErrors({ submit: 'Upload failed. Check your network.' });
@@ -226,6 +285,7 @@ function ApplyVisa() {
                                 name="personalPhoto" label="Personal Photo (White Background)"
                                 demoLink="https://www.vietnamimmigration.com/wp-content/uploads/2022/09/photo-requirements-for-vietnam-evisa-application-5.jpg"
                                 file={files.personalPhoto} progress={uploadProgress.personalPhoto}
+                                alreadyUploaded={!!existingUrls.personalPhoto}
                                 error={errors.personalPhoto} onChange={(e) => handleFileChange(e, 'personalPhoto')}
                                 onShowDemo={setDemoImage}
                             />
@@ -233,6 +293,7 @@ function ApplyVisa() {
                                 name="cnicFront" label="CNIC Front Scan"
                                 demoLink="https://service-strapi-artifacts-a0b1c2d3.s3.eu-west-1.amazonaws.com/national_id_pakistan_CNIC_045a9dd28f.webp"
                                 file={files.cnicFront} progress={uploadProgress.cnicFront}
+                                alreadyUploaded={!!existingUrls.cnicFront}
                                 error={errors.cnicFront} onChange={(e) => handleFileChange(e, 'cnicFront')}
                                 onShowDemo={setDemoImage}
                             />
@@ -240,6 +301,7 @@ function ApplyVisa() {
                                 name="cnicBack" label="CNIC Back Scan"
                                 demoLink="https://service-strapi-artifacts-a0b1c2d3.s3.eu-west-1.amazonaws.com/national_id_pakistan_CNIC_045a9dd28f.webp"
                                 file={files.cnicBack} progress={uploadProgress.cnicBack}
+                                alreadyUploaded={!!existingUrls.cnicBack}
                                 error={errors.cnicBack} onChange={(e) => handleFileChange(e, 'cnicBack')}
                                 onShowDemo={setDemoImage}
                             />
@@ -247,27 +309,32 @@ function ApplyVisa() {
                                 name="passport" label="Passport Scan (Data Page)"
                                 demoLink="https://upload.wikimedia.org/wikipedia/commons/c/cf/Pakistan_Passport_Biodata_Page.jpg"
                                 file={files.passport} progress={uploadProgress.passport}
+                                alreadyUploaded={!!existingUrls.passport}
                                 error={errors.passport} onChange={(e) => handleFileChange(e, 'passport')}
                                 onShowDemo={setDemoImage}
                             />
                             <FileUploadField
                                 name="bankStatement" label="Bank Statement"
                                 file={files.bankStatement} progress={uploadProgress.bankStatement}
+                                alreadyUploaded={!!existingUrls.bankStatement}
                                 error={errors.bankStatement} onChange={(e) => handleFileChange(e, 'bankStatement')}
                             />
                             <FileUploadField
                                 name="nicScan" label="NIC Scan / Other Docs"
                                 file={files.nicScan} progress={uploadProgress.nicScan}
+                                alreadyUploaded={!!existingUrls.nicScan}
                                 error={errors.nicScan} onChange={(e) => handleFileChange(e, 'nicScan')}
                             />
                             <FileUploadField
                                 name="bForm" label="B-Form"
                                 file={files.bForm} progress={uploadProgress.bForm}
+                                alreadyUploaded={!!existingUrls.bForm}
                                 error={errors.bForm} onChange={(e) => handleFileChange(e, 'bForm')}
                             />
                             <FileUploadField
                                 name="frc" label="Family Registration Certificate (FRC)"
                                 file={files.frc} progress={uploadProgress.frc}
+                                alreadyUploaded={!!existingUrls.frc}
                                 error={errors.frc} onChange={(e) => handleFileChange(e, 'frc')}
                             />
                         </div>
@@ -316,7 +383,7 @@ const InputBox = ({ label, name, icon, value, onChange, error, type = 'text' }) 
     </div>
 );
 
-const FileUploadField = ({ name, label, file, progress, error, onChange, demoLink, onShowDemo }) => (
+const FileUploadField = ({ name, label, file, progress, error, onChange, demoLink, onShowDemo, alreadyUploaded }) => (
     <div className="text-left">
         <div className="flex justify-between items-center mb-2">
             <label className="block text-sm font-bold text-slate-700 flex items-center gap-2"><FaFileUpload className="text-emerald-600" /> {label} *</label>
@@ -330,14 +397,18 @@ const FileUploadField = ({ name, label, file, progress, error, onChange, demoLin
                 </button>
             )}
         </div>
-        <div className={`relative border-2 border-dashed rounded-xl p-4 transition-all ${error ? 'border-red-500 bg-red-50' : file ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400'}`}>
+        <div className={`relative border-2 border-dashed rounded-xl p-4 transition-all ${error ? 'border-red-500 bg-red-50' : (file || alreadyUploaded) ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400'}`}>
             <input type="file" id={name} onChange={onChange} className="hidden" accept="image/jpeg,image/png" />
             <label htmlFor={name} className="cursor-pointer flex items-center justify-between">
                 <div>
-                    <p className="text-sm font-bold text-slate-800 truncate max-w-[200px]">{file ? file.name : 'Click to upload scan'}</p>
-                    <p className="text-xs text-slate-500">{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : '10KB - 10MB (JPG, PNG)'}</p>
+                    <p className="text-sm font-bold text-slate-800 truncate max-w-[200px]">
+                        {file ? file.name : alreadyUploaded ? 'Already uploaded — click to replace' : 'Click to upload scan'}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                        {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : alreadyUploaded ? 'Saved from your last attempt' : '10KB - 10MB (JPG, PNG)'}
+                    </p>
                 </div>
-                {file && <FaCheckCircle className="text-emerald-500 text-xl" />}
+                {(file || alreadyUploaded) && <FaCheckCircle className="text-emerald-500 text-xl" />}
             </label>
             {progress > 0 && progress < 100 && (
                 <div className="absolute bottom-0 left-0 h-1 bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />

@@ -9,7 +9,7 @@ function VisaConfirmation() {
     const [visaApplication, setVisaApplication] = useState(null);
 
     useEffect(() => {
-        const savedApplication = sessionStorage.getItem('confirmed_visa_application');
+        const savedApplication = localStorage.getItem('confirmed_visa_application');
 
         if (!savedApplication) {
             navigate('/');

@@ -48,9 +48,17 @@ export default function PaymentReturn() {
     processPaymentAndPolicy(orderId);
   }, []);
 
-  // Determine payment type (insurance or visa)
+  // Determine payment type (insurance or visa).
+  // Primary signal: the order ID itself always carries the type prefix
+  // (VisaPayment.jsx sends transactionId `VISA-${Date.now()}`), so this works
+  // even if sessionStorage didn't survive the bank redirect (e.g. it opened
+  // in a new tab/browsing context, which drops sessionStorage).
   const getPaymentType = () => {
-    const visaData = sessionStorage.getItem('pending_visa_application');
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('O') || '';
+    if (orderId.toUpperCase().startsWith('VISA')) return 'visa';
+
+    const visaData = localStorage.getItem('pending_visa_application');
     const insuranceData = sessionStorage.getItem('pending_policy');
 
     if (visaData) return 'visa';
@@ -151,7 +159,7 @@ export default function PaymentReturn() {
   // Process Visa Application
   const processVisaApplication = async (orderId, paymentVerification) => {
     try {
-      const visaData = sessionStorage.getItem('pending_visa_application');
+      const visaData = localStorage.getItem('pending_visa_application');
       if (!visaData) {
         throw new Error('Visa application data not found');
       }
@@ -192,10 +200,11 @@ export default function PaymentReturn() {
       };
 
       localStorage.setItem('latest_visa_application', JSON.stringify(completeApplicationData));
-      sessionStorage.setItem('confirmed_visa_application', JSON.stringify(completeApplicationData.applicationData));
+      localStorage.setItem('confirmed_visa_application', JSON.stringify(completeApplicationData.applicationData));
 
       // Now safe to clear pending data after successful save
-      sessionStorage.removeItem('pending_visa_application');
+      localStorage.removeItem('pending_visa_application');
+      localStorage.removeItem('visa_form_draft'); // application done, no need to keep the form draft anymore
 
       // Fire-and-forget invoice email (PDF attached) - never blocks the UI flow
       sendInvoiceEmail({
@@ -325,8 +334,8 @@ export default function PaymentReturn() {
           data: {
             TransactionId: orderId,
             TransactionReferenceNumber: `REF-${orderId}`,
-            TransactionAmount: sessionStorage.getItem('pending_visa_application')
-              ? JSON.parse(sessionStorage.getItem('pending_visa_application')).totalFee
+            TransactionAmount: localStorage.getItem('pending_visa_application')
+              ? JSON.parse(localStorage.getItem('pending_visa_application')).totalFee
               : '0',
             TransactionDateTime: new Date().toISOString(),
             TransactionStatus: 'SUCCESS',

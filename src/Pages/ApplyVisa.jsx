@@ -119,6 +119,7 @@ function ApplyVisa() {
 
         if (!formData.fullName.trim()) newErrors.fullName = 'Required';
         if (!formData.email.trim()) newErrors.email = 'Required';
+        if (!formData.phone.trim()) newErrors.phone = 'Required';
         if (!formData.country) newErrors.country = 'Required';
         if (!formData.cnic.trim()) newErrors.cnic = 'Required';
         if (!formData.age.toString().trim()) newErrors.age = 'Required';
@@ -210,8 +211,8 @@ function ApplyVisa() {
                     {/* Personal Info */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <InputBox label="Full Name" name="fullName" icon={<FaUser />} value={formData.fullName} onChange={handleInputChange} error={errors.fullName} />
-                        <InputBox label="Email Address" name="email" icon={<FaEnvelope />} value={formData.email} onChange={handleInputChange} error={errors.email} />
-                        <InputBox label="Phone Number" name="phone" icon={<FaPhone />} value={formData.phone} onChange={handleInputChange} error={errors.phone} />
+                        <InputBox label="Email Address *" name="email" icon={<FaEnvelope />} value={formData.email} onChange={handleInputChange} error={errors.email} />
+                        <InputBox label="Phone Number *" name="phone" icon={<FaPhone />} value={formData.phone} onChange={handleInputChange} error={errors.phone} />
                         <InputBox label="CNIC (13 Digits, no dashes)" name="cnic" icon={<FaIdCard />} value={formData.cnic} onChange={handleInputChange} error={errors.cnic} />
                         <InputBox label="Age" name="age" icon={<FaUser />} value={formData.age} onChange={handleInputChange} error={errors.age} type="number" />
                         <InputBox label="Passport Number" name="passportNumber" icon={<FaPassport />} value={formData.passportNumber} onChange={handleInputChange} error={errors.passportNumber} />

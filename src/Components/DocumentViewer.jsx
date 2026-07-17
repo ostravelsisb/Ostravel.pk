@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { MdClose, MdZoomIn, MdZoomOut, MdRefresh, MdDownload, MdCheckCircle, MdErrorOutline, MdDelete, MdWarning, MdLockOpen } from 'react-icons/md';
+import { MdClose, MdZoomIn, MdZoomOut, MdRefresh, MdDownload, MdCheckCircle, MdErrorOutline, MdDelete, MdWarning, MdLockOpen, MdDescription, MdFileDownload } from 'react-icons/md';
 import { FaPassport } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ref, listAll, getDownloadURL, deleteObject } from "firebase/storage";

@@ -797,10 +797,20 @@ function SubAdminsTab() {
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState("overview");
     const [visas, setVisas] = useState([]);
+    // Insurance-flow transactions (BookingConfirmation.jsx writes here, has 'amount' + 'purchaseDate')
     const [policies, setPolicies] = useState([]);
+    // Payment-gateway transactions (PaymentReturn.jsx writes here, has 'amountPaid' + 'orderDate')
+    const [gatewayPolicies, setGatewayPolicies] = useState([]);
     const [messages, setMessages] = useState([]);
     const [inquiries, setInquiries] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // Helpers to read amount/date across both collections (different field names).
+    const getPolicyAmount = (r) => Number(r?.amount ?? r?.amountPaid ?? 0) || 0;
+    const getPolicyDate = (r) => r?.purchaseDate?.toDate?.() || r?.purchaseDate
+        || r?.orderDate?.toDate?.() || r?.orderDate
+        || r?.createdAt?.toDate?.() || r?.createdAt
+        || null;
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [historyVisa, setHistoryVisa] = useState(null);
     const [visaQuickFilter, setVisaQuickFilter] = useState("");
@@ -847,21 +857,47 @@ export default function AdminDashboard() {
             (e) => { console.error("visas onSnapshot error:", e); setLoading(false); }
         );
 
+        // Realtime listener for insurance policies (BookingConfirmation flow).
+        // Was using one-time getDocs, so newly added transactions didn't show up
+        // without a page refresh — that's why revenue was stuck at 6610.
+        const insuranceUnsub = onSnapshot(
+            query(collection(db, "insurancesCustumer"), orderBy("purchaseDate", "desc")),
+            (snap) => {
+                setPolicies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                setLoading(false);
+            },
+            (e) => { console.error("insurancesCustumer onSnapshot error:", e); }
+        );
+
+        // Realtime listener for payment-gateway transactions (PaymentReturn flow).
+        // This collection was NEVER being read by the dashboard — the second
+        // half of why total revenue stayed frozen.
+        const gatewayUnsub = onSnapshot(
+            query(collection(db, "policies"), orderBy("orderDate", "desc")),
+            (snap) => {
+                setGatewayPolicies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            },
+            (e) => { console.error("policies onSnapshot error:", e); }
+        );
+
+        // Non-revenue collections — one-time fetch is fine, they don't drive KPIs.
         const fetchRest = async () => {
             try {
-                const [p, m, i] = await Promise.all([
-                    getDocs(query(collection(db, "insurancesCustumer"), orderBy("purchaseDate", "desc"))),
+                const [m, i] = await Promise.all([
                     getDocs(query(collection(db, "contact_messages"), orderBy("createdAt", "desc"))),
                     getDocs(query(collection(db, "umardet"), orderBy("createdAt", "desc")))
                 ]);
-                setPolicies(p.docs.map(d => ({ id: d.id, ...d.data() })));
                 setMessages(m.docs.map(d => ({ id: d.id, ...d.data() })));
                 setInquiries(i.docs.map(d => ({ id: d.id, ...d.data() })));
             } catch (e) { console.error(e); }
         };
         fetchRest();
 
-        return () => visasUnsub();
+        return () => {
+            visasUnsub();
+            insuranceUnsub();
+            gatewayUnsub();
+        };
     }, []);
 
     const updateLocal = (type, id, updates) => {
@@ -958,12 +994,29 @@ export default function AdminDashboard() {
         }
     };
 
-    const stats = useMemo(() => ({
-        revenue: policies.reduce((a, b) => a + (Number(b.amount) || 0), 0),
-        pending: visas.filter(v => v.status === "Doc Received").length,
-        approved: visas.filter(v => v.status === "Approve").length,
-        rejected: visas.filter(v => v.status === "Reject").length,
-    }), [visas, policies]);
+    const stats = useMemo(() => {
+        // Sum revenue from ALL THREE sources:
+        // - `policies` (state) ← insurance bookings (BookingConfirmation.jsx writes here)
+        // - `gatewayPolicies` (state) ← insurance payment-gateway transactions (PaymentReturn.jsx writes here)
+        // - `visas` (state) ← visa applications paid via gateway (PaymentReturn.jsx writes amountPaid straight
+        //   into visaApplications, NOT into `policies`, so it needs to be counted separately)
+        // Exclude dev-only bypass test records (order IDs starting VISA-TEST-) from ALL
+        // THREE sources — these were never real payments, see PaymentReturn.jsx
+        // verifyPayment(). Must be applied here too, not just to `visas`, or this KPI
+        // won't match the (correctly filtered) Revenue Details page.
+        const isRealPayment = (r) => !String(r?.orderId || "").startsWith("VISA-TEST-");
+        const insuranceRevenue = policies.filter(isRealPayment).reduce((a, b) => a + getPolicyAmount(b), 0);
+        const gatewayRevenue = gatewayPolicies.filter(isRealPayment).reduce((a, b) => a + getPolicyAmount(b), 0);
+        const visaRevenue = visas
+            .filter(isRealPayment)
+            .reduce((a, b) => a + (Number(b?.amountPaid) || 0), 0);
+        return {
+            revenue: insuranceRevenue + gatewayRevenue + visaRevenue,
+            pending: visas.filter(v => v.status === "Doc Received").length,
+            approved: visas.filter(v => v.status === "Approve").length,
+            rejected: visas.filter(v => v.status === "Reject").length,
+        };
+    }, [visas, policies, gatewayPolicies]);
 
     const parseDate = (d) => {
         if (!d) return null;
@@ -1005,6 +1058,11 @@ export default function AdminDashboard() {
         const endDt = getSalesEndDate(salesPeriod);
         // Group by month for multi-month periods, by day-of-week for short periods
         const useMonthly = ["This Year", "Last Year", "Last 12 Months"].includes(salesPeriod);
+        // Single helper: tally revenue from a policy record (handles both schemas).
+        const addRevenueFor = (bucket, record) => {
+            const d = getPolicyDate(record);
+            if (d && d >= cutoff && d <= endDt) bucket.revenue += getPolicyAmount(record) / 1000;
+        };
         if (useMonthly) {
             const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
             const totals = months.map(m => ({ day: m, applications: 0, revenue: 0 }));
@@ -1012,10 +1070,7 @@ export default function AdminDashboard() {
                 const d = parseDate(v.applicationDate);
                 if (d && d >= cutoff && d <= endDt) totals[d.getMonth()].applications += 1;
             });
-            policies.forEach(p => {
-                const d = parseDate(p.purchaseDate);
-                if (d && d >= cutoff && d <= endDt) totals[d.getMonth()].revenue += (Number(p.amount) || 0) / 1000;
-            });
+            [...policies, ...gatewayPolicies].forEach(p => addRevenueFor(totals[getPolicyDate(p)?.getMonth() ?? -1] || totals[0], p));
             // For "Last Year" only show that year's months; for "This Year" trim future months
             if (salesPeriod === "This Year") {
                 const currentMonth = new Date().getMonth();
@@ -1029,22 +1084,25 @@ export default function AdminDashboard() {
                 const d = parseDate(v.applicationDate);
                 if (d && d >= cutoff && d <= endDt) totals[d.getDay()].applications += 1;
             });
-            policies.forEach(p => {
-                const d = parseDate(p.purchaseDate);
-                if (d && d >= cutoff && d <= endDt) totals[d.getDay()].revenue += (Number(p.amount) || 0) / 1000;
+            [...policies, ...gatewayPolicies].forEach(p => {
+                const d = getPolicyDate(p);
+                if (d && d >= cutoff && d <= endDt) totals[d.getDay()].revenue += getPolicyAmount(p) / 1000;
             });
             return totals;
         }
-    }, [visas, policies, salesPeriod]);
+    }, [visas, policies, gatewayPolicies, salesPeriod]);
 
     // Keep weeklyOverview for backward compat with other usages
     const weeklyOverview = useMemo(() => {
         const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         const totals = days.map(d => ({ day: d, applications: 0, revenue: 0 }));
         visas.forEach(v => { const d = parseDate(v.applicationDate); if (d) totals[d.getDay()].applications += 1; });
-        policies.forEach(p => { const d = parseDate(p.purchaseDate); if (d) totals[d.getDay()].revenue += (Number(p.amount) || 0) / 1000; });
+        [...policies, ...gatewayPolicies].forEach(p => {
+            const d = getPolicyDate(p);
+            if (d) totals[d.getDay()].revenue += getPolicyAmount(p) / 1000;
+        });
         return totals;
-    }, [visas, policies]);
+    }, [visas, policies, gatewayPolicies]);
 
     const donutData = useMemo(() => {
         const now = new Date();
@@ -1300,7 +1358,8 @@ export default function AdminDashboard() {
                             <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}>
                                 <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                                     whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(249,123,79,0.25)" }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                    className="bg-[#FEE8E0] rounded-2xl p-5 border border-black/5 cursor-default">
+                                    onClick={() => navigate("/admin/revenue")} whileTap={{ scale: 0.97 }}
+                                    className="bg-[#FEE8E0] rounded-2xl p-5 border border-black/5 cursor-pointer">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="w-10 h-10 rounded-xl bg-[#F97B4F] flex items-center justify-center text-white text-xl shadow-sm shadow-orange-300"><MdReceipt /></div>
                                         <p className="text-base font-bold text-gray-600">Total Revenue</p>

@@ -399,6 +399,40 @@ export default function SubAdminPanel() {
     // Get assigned countries from userData
     const assignedCountries = userData?.assignedCountries || [];
 
+    // Revenue KPI (country-scoped) — feeds the Total Revenue card + /subadmin/revenue page
+    const [countryRevenue, setCountryRevenue] = useState(0);
+    useEffect(() => {
+        if (assignedCountries.length === 0) { setCountryRevenue(0); return; }
+        const lower = assignedCountries.map(c => c.toLowerCase());
+        const getCountry = (r) => r?.country || r?.destinationCountry || r?.destination
+            || r?.planDetails?.Country || r?.PlanDetails?.Country || r?.planDetails?.country || null;
+        const getAmount = (r) => Number(r?.amount ?? r?.amountPaid ?? 0) || 0;
+        // `visas` (component state) is already the country-filtered visaApplications list,
+        // so paid visa fees just need summing straight from it. Excludes dev-only
+        // bypass test records (order IDs starting VISA-TEST-) — never real payments.
+        const visaRevenue = visas
+            .filter(v => !String(v?.orderId || "").startsWith("VISA-TEST-"))
+            .reduce((a, v) => a + (Number(v?.amountPaid) || 0), 0);
+        let insuranceSum = 0, gatewaySum = 0;
+        const recalc = () => setCountryRevenue(insuranceSum + gatewaySum + visaRevenue);
+        const sumMatching = (docs) => docs.reduce((a, r) => {
+            // Exclude dev-only bypass test records (order IDs starting VISA-TEST-) —
+            // these were never real payments, see PaymentReturn.jsx verifyPayment().
+            if (String(r?.orderId || "").startsWith("VISA-TEST-")) return a;
+            const c = getCountry(r);
+            return c && lower.includes(String(c).toLowerCase()) ? a + getAmount(r) : a;
+        }, 0);
+        const insuranceUnsub = onSnapshot(collection(db, "insurancesCustumer"), (snap) => {
+            insuranceSum = sumMatching(snap.docs.map(d => d.data()));
+            recalc();
+        }, (e) => console.error("insurancesCustumer onSnapshot error:", e));
+        const gatewayUnsub = onSnapshot(collection(db, "policies"), (snap) => {
+            gatewaySum = sumMatching(snap.docs.map(d => d.data()));
+            recalc();
+        }, (e) => console.error("policies onSnapshot error:", e));
+        return () => { insuranceUnsub(); gatewayUnsub(); };
+    }, [assignedCountries, visas]);
+
     // Data Fetching - Only assigned countries
     useEffect(() => {
         if (assignedCountries.length === 0) {
@@ -975,13 +1009,32 @@ export default function SubAdminPanel() {
                                 </span>
                             </div> */}
 
-                            {/* === TOP KPI ROW (5 pastel cards) === */}
+                            {/* === TOP KPI ROW (6 pastel cards) === */}
                             <motion.div
-                                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"
+                                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4"
                                 initial="hidden"
                                 animate="show"
                                 variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07 } } }}
                             >
+                                {/* Total Revenue */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(249,123,79,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => navigate("/subadmin/revenue")}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#FEE8E0] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-[#F97B4F] flex items-center justify-center text-white text-xl shadow-sm shadow-orange-300">
+                                            <MdReceipt />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Total Revenue</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {countryRevenue.toLocaleString()}</h3>
+                                    <p className="text-[13px] font-bold text-orange-600">for your assigned countries</p>
+                                </motion.div>
+
                                 {/* Total */}
                                 <motion.div
                                     variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}

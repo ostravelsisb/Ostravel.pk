@@ -326,8 +326,13 @@ export default function PaymentReturn() {
   // Verify payment with your backend
   const verifyPayment = async (orderId) => {
     try {
-      // DEVELOPMENT: Handle test order IDs
-      if (orderId && orderId.startsWith('VISA-TEST-')) {
+      // DEVELOPMENT ONLY: Handle test order IDs. Gated behind import.meta.env.DEV
+      // so this bypass can never run in a production build — previously it was
+      // unconditional, meaning anyone could visit
+      // /payment-return?O=VISA-TEST-x&TS=SUCCESS&RC=00 live and get a fake "PAID"
+      // record with zero real payment, and any real failed transaction that
+      // happened to reuse a VISA-TEST- id would be recorded as paid too.
+      if (import.meta.env.DEV && orderId && orderId.startsWith('VISA-TEST-')) {
         console.log('🧪 TEST MODE: Bypassing payment verification for test order:', orderId);
         return {
           success: true,
@@ -442,6 +447,12 @@ export default function PaymentReturn() {
         transactionRef: paymentDetails?.TransactionReferenceNumber,
         amountPaid: parseFloat(paymentDetails?.TransactionAmount || customerInfo.amount),
         paymentDateTime: paymentDetails?.TransactionDateTime,
+        // Sender's bank details — only present if Bank Alfalah's response actually
+        // includes them (field names guessed since the gateway payload isn't
+        // documented here; harmless if these all come back undefined).
+        payerAccountTitle: paymentDetails?.AccountTitle || paymentDetails?.PayerName || paymentDetails?.CardHolderName || null,
+        payerAccountNumber: paymentDetails?.AccountNumber || paymentDetails?.MaskedAccountNumber || paymentDetails?.MaskedCardNumber || paymentDetails?.IBAN || null,
+        payerBankName: paymentDetails?.BankName || paymentDetails?.IssuerBank || null,
 
         // Policy Info
         policyNumber: policyDetails.policyNumber,
@@ -491,6 +502,12 @@ export default function PaymentReturn() {
         transactionRef: paymentDetails?.TransactionReferenceNumber,
         amountPaid: parseFloat(paymentDetails?.TransactionAmount || visaData.totalFee),
         paymentDateTime: paymentDetails?.TransactionDateTime,
+        // Sender's bank details — only present if Bank Alfalah's response actually
+        // includes them (field names guessed since the gateway payload isn't
+        // documented here; harmless if these all come back undefined).
+        payerAccountTitle: paymentDetails?.AccountTitle || paymentDetails?.PayerName || paymentDetails?.CardHolderName || null,
+        payerAccountNumber: paymentDetails?.AccountNumber || paymentDetails?.MaskedAccountNumber || paymentDetails?.MaskedCardNumber || paymentDetails?.IBAN || null,
+        payerBankName: paymentDetails?.BankName || paymentDetails?.IssuerBank || null,
 
         // Visa Application Details
         applicantName: visaData.applicantName || '',

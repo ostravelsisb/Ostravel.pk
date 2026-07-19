@@ -51,6 +51,7 @@ const PaymentReturn = lazy(() => import('./Pages/PaymentReturn'));
 const AdminLogin = lazy(() => import('./Pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('./Pages/AdminDashboard'));
 const SubAdminPanel = lazy(() => import('./Pages/SubAdminPanel'));
+const RevenueDetails = lazy(() => import('./Pages/RevenueDetails'));
 
 // --- Visa Application Pages ---
 const ApplyVisa = lazy(() => import('./Pages/ApplyVisa'));
@@ -137,12 +138,30 @@ function App() {
                 }
               />
 
+              <Route
+                path="/admin/revenue"
+                element={
+                  <RequireAdmin>
+                    <RevenueDetails />
+                  </RequireAdmin>
+                }
+              />
+
               {/* --- SUB-ADMIN ROUTES --- */}
               <Route
                 path="/subadmin/dashboard"
                 element={
                   <RequireSubAdmin>
                     <SubAdminPanel />
+                  </RequireSubAdmin>
+                }
+              />
+
+              <Route
+                path="/subadmin/revenue"
+                element={
+                  <RequireSubAdmin>
+                    <RevenueDetails />
                   </RequireSubAdmin>
                 }
               />

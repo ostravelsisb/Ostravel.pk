@@ -7,7 +7,7 @@ const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
 import { useAuth } from '../Context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt, HiReceiptTax } from 'react-icons/hi'; // Added HiChatAlt, HiReceiptTax
-import { updateApplicationData, markMessageSeen, hasUnseenMessage } from '../Utils/ApplicationEditUtils';
+import { updateApplicationData, markMessageSeen, hasUnseenMessage, saveUserMessage } from '../Utils/ApplicationEditUtils';
 import { getCachedData, setCachedData } from '../Utils/cacheUtils';
 import { getAllCountryNames, getVisaDataByCountry } from '../Data/visaData'; // Import country data
 import InvoiceModal from '../Components/InvoiceModal';
@@ -23,6 +23,9 @@ const UserDashboard = () => {
     // View States
     const [viewingVisa, setViewingVisa] = useState(null);
     const [viewingPolicy, setViewingPolicy] = useState(null);
+    // Message-to-admin box (per application)
+    const [userMsgText, setUserMsgText] = useState('');
+    const [sendingUserMsg, setSendingUserMsg] = useState(false);
     const [invoiceRecord, setInvoiceRecord] = useState(null); // { record, recordType }
 
     // Edit States
@@ -165,6 +168,22 @@ const UserDashboard = () => {
             'Unpaid': 'bg-orange-100 text-orange-800',
         };
         return statusColors[status] || 'bg-gray-100 text-gray-800';
+    };
+
+    const handleSendUserMessage = async (visa) => {
+        const text = userMsgText.trim();
+        if (!text) return;
+        setSendingUserMsg(true);
+        try {
+            await saveUserMessage(visa.id, 'visaApplications', text);
+            setUserMsgText('');
+            notify.success('Message sent to our team');
+        } catch (err) {
+            console.error('Error sending message to admin:', err);
+            notify.error('Failed to send message — try again');
+        } finally {
+            setSendingUserMsg(false);
+        }
     };
 
     const handleEditVisa = (visa) => {
@@ -436,7 +455,12 @@ const UserDashboard = () => {
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
-                                                            onClick={() => setViewingVisa(visa)}
+                                                            onClick={() => {
+                                                                setViewingVisa(visa);
+                                                                if (hasUnseenMessage(visa)) {
+                                                                    markMessageSeen(visa.id, 'visaApplications', visa.adminMessageAt || null);
+                                                                }
+                                                            }}
                                                             className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold"
                                                         >
                                                             <HiEye className="w-4 h-4" /> View
@@ -595,6 +619,35 @@ const UserDashboard = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* MESSAGE THE ADMIN — user can send a message about this application */}
+                            <div className="mx-8 mt-6 bg-slate-50 border border-slate-200 p-5 rounded-xl">
+                                <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                    <HiChatAlt className="text-lg text-blue-600" /> Message Our Team
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">Have a question about this application? Send a message and our team will get back to you.</p>
+                                <div className="mt-3 flex items-end gap-2">
+                                    <textarea
+                                        value={userMsgText}
+                                        onChange={(e) => setUserMsgText(e.target.value)}
+                                        placeholder="Type your message..."
+                                        rows={2}
+                                        className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    />
+                                    <button
+                                        onClick={() => handleSendUserMessage(viewingVisa)}
+                                        disabled={sendingUserMsg || !userMsgText.trim()}
+                                        className="shrink-0 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {sendingUserMsg ? 'Sending...' : 'Send'}
+                                    </button>
+                                </div>
+                                {viewingVisa.userMessage && (
+                                    <p className="text-xs text-slate-500 mt-3">
+                                        Last message sent: <span className="italic">"{viewingVisa.userMessage}"</span>
+                                    </p>
+                                )}
+                            </div>
 
                             {/* Scrollable Content Wrapper */}
                             <div className="overflow-y-auto flex-1">

@@ -15,7 +15,9 @@ import RequireUser from './Context/RequireUser';
 import Navbar from './Components/Navbar';
 import Footer from './Components/Footer';
 import Chatbot from './Chatbot/Chatbot';
+import LiveChatWidget from './Chatbot/LiveChatWidget';
 import Whatsapp from './Chatbot/Whatsapp';
+import { useAuth } from './Context/AuthContext';
 
 import LoadingSpinner from './Components/LoadingSpinner';
 
@@ -57,6 +59,11 @@ const RevenueDetails = lazy(() => import('./Pages/RevenueDetails'));
 const ApplyVisa = lazy(() => import('./Pages/ApplyVisa'));
 const VisaPayment = lazy(() => import('./Pages/VisaPayment'));
 const VisaConfirmation = lazy(() => import('./Pages/VisaConfirmation'));
+
+function SupportWidget() {
+  const { currentUser } = useAuth();
+  return currentUser ? <LiveChatWidget /> : <Chatbot />;
+}
 
 function App() {
   const location = useLocation();
@@ -175,7 +182,7 @@ function App() {
           {!isAdminRoute && (
             <>
               <Footer />
-              <Chatbot />
+              <SupportWidget />
               <Whatsapp />
             </>
           )}

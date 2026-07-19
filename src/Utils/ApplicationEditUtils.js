@@ -28,6 +28,66 @@ export const toggleEditApproval = async (docId, collectionName, approved, adminE
 };
 
 /**
+ * Save a message from the USER to the admin/subadmin for an application.
+ * Tracked separately from admin->user messages so both sides get their
+ * own unseen-badge state.
+ * @param {string} docId - Document ID
+ * @param {string} collectionName - Collection name
+ * @param {string} message - Message from the user
+ * @returns {Promise<void>}
+ */
+export const saveUserMessage = async (docId, collectionName, message) => {
+    try {
+        const docRef = doc(db, collectionName, docId);
+        const messageEntry = {
+            message: message,
+            sentAt: new Date().toISOString(),
+            sentBy: 'user'
+        };
+
+        await updateDoc(docRef, {
+            userMessage: message,
+            userMessageAt: new Date().toISOString(),
+            // Add to the same shared message history array
+            messageHistory: arrayUnion(messageEntry)
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('Error saving user message:', error);
+        throw error;
+    }
+};
+
+/**
+ * Mark the latest user->admin message as seen (called when admin/subadmin
+ * dismisses the "Msg from User" badge).
+ * @param {string} docId
+ * @param {string} collectionName
+ * @param {string} userMessageAt - timestamp of the message being acknowledged
+ */
+export const markUserMessageSeen = async (docId, collectionName, userMessageAt) => {
+    try {
+        const docRef = doc(db, collectionName, docId);
+        await updateDoc(docRef, {
+            userMessageSeenAt: userMessageAt ?? null
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('Error marking user message seen:', error);
+        throw error;
+    }
+};
+
+/**
+ * Whether there is a user->admin message the admin/subadmin hasn't seen yet.
+ * @param {object} application
+ */
+export const hasUnseenUserMessage = (application) => {
+    if (!application?.userMessage) return false;
+    return toMillis(application.userMessageAt) !== toMillis(application.userMessageSeenAt);
+};
+
+/**
  * Save admin message for an application and track in message history
  * @param {string} docId - Document ID
  * @param {string} collectionName - Collection name

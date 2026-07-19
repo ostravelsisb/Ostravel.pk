@@ -29,7 +29,8 @@ import VisaAnalytics from "../Components/VisaAnalytics";
 import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
 import EditHistoryModal from "../Components/EditHistoryModal";
-import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter } from "../Utils/ApplicationEditUtils";
+import LiveChatPanel from "../Components/LiveChatPanel";
+import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter, hasUnseenUserMessage, markUserMessageSeen } from "../Utils/ApplicationEditUtils";
 import { sendUmrahStatusEmail, sendUmrahMessageEmail, sendConsolidatedUpdateEmail } from "../Utils/emailService";
 import ToastContainer, { notify } from "../Components/Toast";
 
@@ -551,7 +552,8 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
 }
 
 // ─── MESSAGES TAB ─────────────────────────────────────────────────────────────
-function MessagesTab({ messages }) {
+function MessagesTab({ messages, adminName }) {
+    const [segment, setSegment] = useState("liveChat"); // "liveChat" | "contactForm"
     const [search, setSearch] = useState("");
     const [selectedMsg, setSelectedMsg] = useState(null);
     const [page, setPage] = useState(1);
@@ -589,6 +591,30 @@ function MessagesTab({ messages }) {
     return (
         <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-5">
 
+            {/* Segment Toggle */}
+            <motion.div variants={fadeUp} className="inline-flex bg-white rounded-2xl border border-gray-200 shadow-sm p-1.5 gap-1">
+                {[
+                    { id: "liveChat", label: "Live Chat" },
+                    { id: "contactForm", label: "Contact Form" },
+                ].map((s) => (
+                    <button
+                        key={s.id}
+                        onClick={() => setSegment(s.id)}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                            segment === s.id
+                                ? "bg-orange-500 text-white shadow-sm shadow-orange-200"
+                                : "text-gray-500 hover:bg-gray-50"
+                        }`}
+                    >
+                        {s.label}
+                    </button>
+                ))}
+            </motion.div>
+
+            {segment === "liveChat" && <LiveChatPanel adminName={adminName} />}
+
+            {segment === "contactForm" && (
+            <>
             {/* Stats */}
             <motion.div variants={stagger} className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {[
@@ -740,6 +766,8 @@ function MessagesTab({ messages }) {
                     </AnimatePresence>
                 </div>
             </div>
+            </>
+            )}
         </motion.div>
     );
 }
@@ -915,9 +943,14 @@ export default function AdminDashboard() {
         setPendingChanges(prev => {
             const existing = prev[id] || {};
             const merged = { ...existing, ...patch };
-            // documentActions accumulate instead of overwriting
+            // documentActions accumulate, but only the latest action per
+            // document label is kept so verify -> unverify -> verify does
+            // not stack duplicate "Verified" entries in the email.
             if (patch.documentActions) {
-                merged.documentActions = [...(existing.documentActions || []), ...patch.documentActions];
+                const combined = [...(existing.documentActions || []), ...patch.documentActions];
+                const byLabel = new Map();
+                combined.forEach(action => byLabel.set(action.docLabel, action));
+                merged.documentActions = Array.from(byLabel.values());
             }
             return { ...prev, [id]: merged };
         });
@@ -953,9 +986,10 @@ export default function AdminDashboard() {
             .filter(([, enabled]) => enabled)
             .map(([key]) => docLabelMap[key] || key);
 
-        // Upload decision letter if provided
-        let decisionDocURL = null;
-        let decisionDocName = null;
+        // Upload decision letter if provided; otherwise fall back to a letter
+        // that was already attached previously, so it still gets emailed.
+        let decisionDocURL = visaItem.decisionDocURL || null;
+        let decisionDocName = visaItem.decisionDocName || null;
         const decisionFile = decisionDocs[visaItem.id];
         if (decisionFile) {
             try {
@@ -1636,7 +1670,7 @@ export default function AdminDashboard() {
 
                     {/* ════ MESSAGES TAB ════ */}
                     {activeTab === "messages" && (
-                        <MessagesTab messages={filteredMessages} />
+                        <MessagesTab messages={filteredMessages} adminName={currentUser?.email} />
                     )}
 
                     {/* ════ SUB-ADMINS TAB ════ */}
@@ -1921,6 +1955,19 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                                 📤 Re-uploaded — Review ✕
                                             </button>
                                         )}
+                                        {hasUnseenUserMessage(v) && (
+                                            <button
+                                                type="button"
+                                                title={v.userMessage}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    markUserMessageSeen(v.id, 'visaApplications', v.userMessageAt || null);
+                                                }}
+                                                className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 text-purple-700 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.1em] border border-purple-300 hover:bg-purple-200 transition-colors cursor-pointer"
+                                            >
+                                                💬 Msg from User ✕
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1929,32 +1976,46 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Status</div>
                                 <div className="flex items-center gap-2">
                                     {(pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || pendingChanges[v.id]?.statusChange?.newStatus === 'Reject' || v.status === 'Approve' || v.status === 'Reject') && (
-                                        <label
-                                            className={`shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-all shadow-sm ${
-                                                decisionDocs[v.id] || v.decisionDocURL
-                                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                                                    : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                                            }`}
-                                            title={
-                                                decisionDocs[v.id]
-                                                    ? `Ready to upload: ${decisionDocs[v.id].name} (click to replace)`
-                                                    : v.decisionDocURL
-                                                    ? 'Letter attached — click to replace'
-                                                    : (pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve') ? 'Attach visa letter' : 'Attach rejection letter'
-                                            }
-                                        >
-                                            {decisionDocs[v.id] || v.decisionDocURL ? <MdCheckCircle className="text-lg" /> : <MdAttachFile className="text-lg" />}
-                                            <input
-                                                type="file"
-                                                accept="image/jpeg,image/png"
-                                                className="hidden"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) setDecisionDocs(prev => ({ ...prev, [v.id]: file }));
-                                                    e.target.value = '';
-                                                }}
-                                            />
-                                        </label>
+                                        <>
+                                            <label
+                                                className={`shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-all shadow-sm ${
+                                                    decisionDocs[v.id] || v.decisionDocURL
+                                                        ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                                }`}
+                                                title={
+                                                    decisionDocs[v.id]
+                                                        ? `Ready to upload: ${decisionDocs[v.id].name} (click to replace)`
+                                                        : v.decisionDocURL
+                                                        ? 'Letter attached — click to replace'
+                                                        : (pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve') ? 'Attach visa letter' : 'Attach rejection letter'
+                                                }
+                                            >
+                                                <MdDescription className="text-lg" />
+                                                <input
+                                                    type="file"
+                                                    accept="image/jpeg,image/png"
+                                                    className="hidden"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) setDecisionDocs(prev => ({ ...prev, [v.id]: file }));
+                                                        e.target.value = '';
+                                                    }}
+                                                />
+                                            </label>
+                                            {v.decisionDocURL && (
+                                                <a
+                                                    href={v.decisionDocURL}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                                                    title="View attached letter"
+                                                >
+                                                    <MdVisibility className="text-lg" />
+                                                </a>
+                                            )}
+                                        </>
                                     )}
                                     <StatusDropdown
                                         id={v.id}
@@ -2004,7 +2065,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                                 }`}
                                                 title={hasPending ? `Send 1 email with ${pendingCount} pending update(s)` : "No pending changes to email"}
                                             >
-                                                <MdSave className="text-xl" />
+                                                <MdEmail className="text-xl" />
                                                 {hasPending && (
                                                     <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
                                                         {pendingCount}

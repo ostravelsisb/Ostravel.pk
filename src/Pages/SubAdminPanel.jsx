@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-    MdDashboard, MdLogout, MdVisibility, MdCheckCircle, MdSave,
+    MdDashboard, MdLogout, MdVisibility, MdCheckCircle, MdSave, MdEmail, MdDescription,
     MdLockOutline, MdLockOpen, MdPerson, MdPublic,
     MdNotificationsNone, MdMenu, MdSearch, MdClear,
     MdKeyboardArrowDown, MdMessage, MdSwapHoriz, MdReceipt,
@@ -20,7 +20,8 @@ import {
 // External Components
 import DocumentViewer from "../Components/DocumentViewer";
 import EditHistoryModal from "../Components/EditHistoryModal";
-import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter } from "../Utils/ApplicationEditUtils";
+import LiveChatPanel from "../Components/LiveChatPanel";
+import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter, hasUnseenUserMessage, markUserMessageSeen } from "../Utils/ApplicationEditUtils";
 import { sendConsolidatedUpdateEmail } from "../Utils/emailService";
 import ToastContainer, { notify } from "../Components/Toast";
 import { logStatusChange, logVisaEdit } from "../Utils/activityLogger";
@@ -478,7 +479,12 @@ export default function SubAdminPanel() {
             const existing = prev[id] || {};
             const merged = { ...existing, ...patch };
             if (patch.documentActions) {
-                merged.documentActions = [...(existing.documentActions || []), ...patch.documentActions];
+                const combined = [...(existing.documentActions || []), ...patch.documentActions];
+                // Keep only the latest action per document label so toggling
+                // verify -> unverify -> verify doesn't stack duplicate entries.
+                const byLabel = new Map();
+                combined.forEach(action => byLabel.set(action.docLabel, action));
+                merged.documentActions = Array.from(byLabel.values());
             }
             return { ...prev, [id]: merged };
         });
@@ -513,9 +519,10 @@ export default function SubAdminPanel() {
             .filter(([, enabled]) => enabled)
             .map(([key]) => docLabelMap[key] || key);
 
-        // Upload decision letter if provided
-        let decisionDocURL = null;
-        let decisionDocName = null;
+        // Upload decision letter if provided; otherwise fall back to a letter
+        // that was already attached previously, so it still gets emailed.
+        let decisionDocURL = visaItem.decisionDocURL || null;
+        let decisionDocName = visaItem.decisionDocName || null;
         const decisionFile = decisionDocs[visaItem.id];
         if (decisionFile) {
             try {
@@ -669,6 +676,7 @@ export default function SubAdminPanel() {
     const navItems = [
         { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
         { id: "visas", label: "Visa Applications", icon: <FaPassport /> },
+        { id: "messages", label: "Messages", icon: <MdEmail /> },
     ];
 
     if (loading) {
@@ -962,7 +970,7 @@ export default function SubAdminPanel() {
                     {/* Page heading */}
                     <div className="mb-7">
                         <h1 className="text-4xl font-bold text-slate-800 tracking-tight">
-                            {activeTab === "overview" ? "Dashboard" : "Visa Applications"}
+                            {activeTab === "overview" ? "Dashboard" : activeTab === "messages" ? "Messages" : "Visa Applications"}
                         </h1>
                         <p className="text-base text-gray-500 font-medium mt-1">
                             Managing applications for{" "}
@@ -1678,6 +1686,19 @@ export default function SubAdminPanel() {
                                                                 📤 Re-uploaded — Review ✕
                                                             </button>
                                                         )}
+                                                        {hasUnseenUserMessage(v) && (
+                                                            <button
+                                                                type="button"
+                                                                title={v.userMessage}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    markUserMessageSeen(v.id, 'visaApplications', v.userMessageAt || null);
+                                                                }}
+                                                                className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 text-purple-700 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.1em] border border-purple-300 hover:bg-purple-200 transition-colors cursor-pointer"
+                                                            >
+                                                                💬 Msg from User ✕
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1686,32 +1707,46 @@ export default function SubAdminPanel() {
                                                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Status</div>
                                                 <div className="flex items-center gap-2">
                                                     {(pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || pendingChanges[v.id]?.statusChange?.newStatus === 'Reject' || v.status === 'Approve' || v.status === 'Reject') && (
-                                                        <label
-                                                            className={`shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-all shadow-sm ${
-                                                                decisionDocs[v.id] || v.decisionDocURL
-                                                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                                                                    : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                                                            }`}
-                                                            title={
-                                                                decisionDocs[v.id]
-                                                                    ? `Ready to upload: ${decisionDocs[v.id].name} (click to replace)`
-                                                                    : v.decisionDocURL
-                                                                    ? 'Letter attached — click to replace'
-                                                                    : (pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve') ? 'Attach visa letter' : 'Attach rejection letter'
-                                                            }
-                                                        >
-                                                            {decisionDocs[v.id] || v.decisionDocURL ? <MdCheckCircle className="text-lg" /> : <MdAttachFile className="text-lg" />}
-                                                            <input
-                                                                type="file"
-                                                                accept="image/jpeg,image/png"
-                                                                className="hidden"
-                                                                onChange={(e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    if (file) setDecisionDocs(prev => ({ ...prev, [v.id]: file }));
-                                                                    e.target.value = '';
-                                                                }}
-                                                            />
-                                                        </label>
+                                                        <>
+                                                            <label
+                                                                className={`shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-all shadow-sm ${
+                                                                    decisionDocs[v.id] || v.decisionDocURL
+                                                                        ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                                                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                                                }`}
+                                                                title={
+                                                                    decisionDocs[v.id]
+                                                                        ? `Ready to upload: ${decisionDocs[v.id].name} (click to replace)`
+                                                                        : v.decisionDocURL
+                                                                        ? 'Letter attached — click to replace'
+                                                                        : (pendingChanges[v.id]?.statusChange?.newStatus === 'Approve' || v.status === 'Approve') ? 'Attach visa letter' : 'Attach rejection letter'
+                                                                }
+                                                            >
+                                                                <MdDescription className="text-lg" />
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/jpeg,image/png"
+                                                                    className="hidden"
+                                                                    onChange={(e) => {
+                                                                        const file = e.target.files?.[0];
+                                                                        if (file) setDecisionDocs(prev => ({ ...prev, [v.id]: file }));
+                                                                        e.target.value = '';
+                                                                    }}
+                                                                />
+                                                            </label>
+                                                            {v.decisionDocURL && (
+                                                                <a
+                                                                    href={v.decisionDocURL}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                                                                    title="View attached letter"
+                                                                >
+                                                                    <MdVisibility className="text-lg" />
+                                                                </a>
+                                                            )}
+                                                        </>
                                                     )}
                                                     <StatusDropdown
                                                         id={v.id}
@@ -1765,7 +1800,7 @@ export default function SubAdminPanel() {
                                                                 }`}
                                                                 title={hasPending ? `Send 1 email with ${pendingCount} pending update(s)` : "No pending changes to email"}
                                                             >
-                                                                <MdSave className="text-xl" />
+                                                                <MdEmail className="text-xl" />
                                                                 {hasPending && (
                                                                     <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
                                                                         {pendingCount}
@@ -1790,6 +1825,13 @@ export default function SubAdminPanel() {
                                 )}
                             </div>
                             <Pagination total={filteredVisas.length} page={visaPage} onChange={setVisaPage} />
+                        </div>
+                    )}
+
+                    {/* =================== MESSAGES TAB =================== */}
+                    {activeTab === "messages" && (
+                        <div className="space-y-5">
+                            <LiveChatPanel adminName={currentUser?.email} />
                         </div>
                     )}
                 </main>

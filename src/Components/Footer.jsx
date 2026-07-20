@@ -195,13 +195,20 @@ function Footer() {
              {/* Signature strip — same dark bg/border as the rest of the footer, no visual break */}
       <div className="bg-gray-800 border-t border-gray-700/50">
         <div className="max-w-7xl mx-auto px-6 pt-10 pb-4 flex flex-col items-center">
-          <BlurText
-            text="Created By DataX Technologies"
-            delay={80}
-            animateBy="words"
-            direction="top"
-            className="text-2xl md:text-3xl font-bold text-blue-400 justify-center"
-          />
+          <a
+            href="https://www.datax.pk/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block"
+          >
+            <BlurText
+              text="Created By DataX Technologies"
+              delay={80}
+              animateBy="words"
+              direction="top"
+              className="text-2xl md:text-3xl font-bold text-blue-400 justify-center hover:text-blue-300 transition-colors duration-300"
+            />
+          </a>
         </div>
         <div className="max-w-7xl mx-auto px-6 py-6 border-t border-gray-700/50">
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">

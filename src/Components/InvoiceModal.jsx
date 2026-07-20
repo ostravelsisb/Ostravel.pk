@@ -108,6 +108,19 @@ export default function InvoiceModal({ record, recordType = 'visa', onClose }) {
     const paymentStatus  = record.paymentStatus || 'PAID';
     const paidAt         = record.paymentDateTime || record.applicationDate || record.purchaseDate || record.createdAt || null;
 
+    // Sender's (payer's) bank details — only present if the payment-gateway
+    // response actually included them (not every gateway returns full account
+    // info; some only return a masked account/card number). Falls back across
+    // several plausible field names since the raw gateway payload isn't
+    // normalized. Renders nothing if none of these were ever saved.
+    const senderAccountTitle = record.payerAccountTitle || record.senderAccountTitle
+        || record.accountTitle || record.cardHolderName || record.payerName || null;
+    const senderAccountNumber = record.payerAccountNumber || record.senderAccountNumber
+        || record.accountNumber || record.maskedAccountNumber || record.maskedCardNumber
+        || record.iban || null;
+    const senderBankName = record.payerBankName || record.senderBankName || record.bankName || record.issuerBank || null;
+    const hasSenderBankInfo = senderAccountTitle || senderAccountNumber || senderBankName;
+
     const breakdown = isVisa
         ? [
             { label: 'Visa Fee', amount: record.visaFee || (amountPaid - (record.urgentFee || 0)) },
@@ -237,6 +250,18 @@ export default function InvoiceModal({ record, recordType = 'visa', onClose }) {
                                     <p className="inv-paid-line text-xs text-emerald-700"><b>Reference:</b> {transactionRef}</p>
                                 )}
                                 <p className="inv-paid-line text-xs text-emerald-700"><b>Method:</b> {paymentMethod}</p>
+                                {senderBankName && (
+                                    <p className="inv-paid-line text-xs text-emerald-700"><b>Sender Bank:</b> {senderBankName}</p>
+                                )}
+                                {senderAccountTitle && (
+                                    <p className="inv-paid-line text-xs text-emerald-700"><b>Account Title:</b> {senderAccountTitle}</p>
+                                )}
+                                {senderAccountNumber && (
+                                    <p className="inv-paid-line text-xs text-emerald-700"><b>Account No.:</b> {senderAccountNumber}</p>
+                                )}
+                                {!hasSenderBankInfo && (
+                                    <p className="inv-paid-line text-xs text-emerald-700/70 italic">Sender bank details were not provided by the payment gateway for this transaction.</p>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -25,6 +25,7 @@ import {
 
 // External Components
 import DocumentViewer from "../Components/DocumentViewer";
+import UmrahProcessList from "../Components/UmrahProcessList";
 import VisaAnalytics from "../Components/VisaAnalytics";
 import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
@@ -825,6 +826,7 @@ function SubAdminsTab() {
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState("overview");
     const [visas, setVisas] = useState([]);
+    const [umrahRequests, setUmrahRequests] = useState([]);
     // Insurance-flow transactions (BookingConfirmation.jsx writes here, has 'amount' + 'purchaseDate')
     const [policies, setPolicies] = useState([]);
     // Payment-gateway transactions (PaymentReturn.jsx writes here, has 'amountPaid' + 'orderDate')
@@ -908,6 +910,14 @@ export default function AdminDashboard() {
             (e) => { console.error("policies onSnapshot error:", e); }
         );
 
+        // Realtime listener for Hajj/Umrah requests — admin & sub-admin process
+        // these (status + payment requests) and it must reflect instantly.
+        const umrahUnsub = onSnapshot(
+            query(collection(db, "umrahApplications"), orderBy("applicationDate", "desc")),
+            (snap) => setUmrahRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+            (e) => console.error("umrahApplications onSnapshot error:", e)
+        );
+
         // Non-revenue collections — one-time fetch is fine, they don't drive KPIs.
         const fetchRest = async () => {
             try {
@@ -925,6 +935,7 @@ export default function AdminDashboard() {
             visasUnsub();
             insuranceUnsub();
             gatewayUnsub();
+            umrahUnsub();
         };
     }, []);
 
@@ -1175,7 +1186,7 @@ export default function AdminDashboard() {
     const navItems = [
         { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
         { id: "visas", label: "Visas", icon: <FaPassport /> },
-        { id: "inquiries", label: "Umrah Queries", icon: <FaKaaba /> },
+        { id: "inquiries", label: "Umrah Requests", icon: <FaKaaba /> },
         { id: "messages", label: "Messages", icon: <MdMessage /> },
         { id: "subadmins", label: "Sub-Admins", icon: <FaUsersCog /> },
     ];
@@ -1663,9 +1674,9 @@ export default function AdminDashboard() {
                         <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} pendingChanges={pendingChanges} onStage={stagePendingChange} onSavePending={sendPendingEmail} decisionDocs={decisionDocs} setDecisionDocs={setDecisionDocs} />
                     )}
 
-                    {/* ════ UMRAH QUERIES TAB ════ */}
+                    {/* ════ UMRAH REQUESTS TAB ════ */}
                     {activeTab === "inquiries" && (
-                        <UmrahQueriesTab inquiries={filteredInquiries} updateLocal={updateLocal} />
+                        <UmrahProcessList requests={umrahRequests} actorRole="admin" actorName={currentUser?.email || "Admin"} />
                     )}
 
                     {/* ════ MESSAGES TAB ════ */}

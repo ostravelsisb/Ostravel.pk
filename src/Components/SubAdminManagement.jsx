@@ -34,7 +34,8 @@ export default function SubAdminManagement() {
         email: "",
         password: "",
         displayName: "",
-        assignedCountries: []
+        assignedCountries: [],
+        umrahAccess: false
     });
     const [formError, setFormError] = useState("");
     const [formLoading, setFormLoading] = useState(false);
@@ -82,7 +83,8 @@ export default function SubAdminManagement() {
                 formData.password,
                 formData.displayName,
                 formData.assignedCountries,
-                currentUser.uid
+                currentUser.uid,
+                formData.umrahAccess
             );
 
             // Log activity
@@ -99,7 +101,7 @@ export default function SubAdminManagement() {
             );
 
             // Reset form
-            setFormData({ email: "", password: "", displayName: "", assignedCountries: [] });
+            setFormData({ email: "", password: "", displayName: "", assignedCountries: [], umrahAccess: false });
             setShowCreateModal(false);
 
             // Refresh list
@@ -176,6 +178,30 @@ export default function SubAdminManagement() {
         } catch (error) {
             console.error("Error toggling active status:", error);
             notify.error("Failed to update status");
+        }
+    };
+
+    const handleToggleUmrahAccess = async (subAdminId, newValue) => {
+        try {
+            const subAdminRef = doc(db, "users", subAdminId);
+            await updateDoc(subAdminRef, { umrahAccess: newValue });
+
+            await logSubAdminUpdate(
+                subAdminId,
+                [{ field: "umrahAccess", oldValue: !newValue, newValue }],
+                {
+                    uid: currentUser.uid,
+                    email: currentUser.email,
+                    role: userData?.role || "admin",
+                    displayName: currentUser.displayName || currentUser.email
+                }
+            );
+
+            await fetchSubAdmins();
+            notify.success(`Umrah section access ${newValue ? "granted" : "revoked"}!`);
+        } catch (error) {
+            console.error("Error toggling umrah access:", error);
+            notify.error("Failed to update Umrah access");
         }
     };
 
@@ -319,6 +345,16 @@ export default function SubAdminManagement() {
                                             ) : (
                                                 <span className="text-xs text-slate-400 font-medium">No countries assigned</span>
                                             )}
+                                            <button
+                                                onClick={() => handleToggleUmrahAccess(subAdmin.id, !!subAdmin.umrahAccess)}
+                                                title="Toggle access to the Umrah Requests section"
+                                                className={`ml-1 text-xs px-2.5 py-1 rounded-full font-black transition-all ${subAdmin.umrahAccess
+                                                        ? "bg-purple-600 text-white"
+                                                        : "bg-white border border-slate-200 text-slate-400 hover:bg-slate-100"
+                                                    }`}
+                                            >
+                                                🕋 Umrah {subAdmin.umrahAccess ? "ON" : "OFF"}
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -492,6 +528,22 @@ export default function SubAdminManagement() {
                                             ))}
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Umrah Section Access */}
+                                <div>
+                                    <label className="flex items-center gap-3 border border-slate-200 rounded-xl p-4 cursor-pointer hover:bg-slate-50 transition">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.umrahAccess}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, umrahAccess: e.target.checked }))}
+                                            className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                                        />
+                                        <span>
+                                            <span className="block text-sm font-bold text-slate-700">🕋 Grant Umrah Requests Access</span>
+                                            <span className="block text-xs text-slate-400">Lets this sub-admin view and process Hajj/Umrah bookings, and send payment requests to applicants.</span>
+                                        </span>
+                                    </label>
                                 </div>
 
                                 {/* Error Message */}

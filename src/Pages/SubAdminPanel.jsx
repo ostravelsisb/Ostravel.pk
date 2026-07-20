@@ -7,9 +7,10 @@ import {
     MdKeyboardArrowDown, MdMessage, MdSwapHoriz, MdReceipt,
     MdOutlineContentCopy, MdOutlineCreditCard, MdAttachFile
 } from "react-icons/md";
-import { FaUserShield, FaPassport, FaRegPaperPlane } from "react-icons/fa";
+import { FaUserShield, FaPassport, FaRegPaperPlane, FaKaaba } from "react-icons/fa";
 import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp, where, onSnapshot } from "firebase/firestore";
 import { db, signOut } from "../firbase";
+import UmrahProcessList from "../Components/UmrahProcessList";
 import { useAuth } from "../Context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -400,6 +401,18 @@ export default function SubAdminPanel() {
     // Get assigned countries from userData
     const assignedCountries = userData?.assignedCountries || [];
 
+    // Umrah Requests — only listened to if this sub-admin has been granted access.
+    const [umrahRequests, setUmrahRequests] = useState([]);
+    useEffect(() => {
+        if (!userData?.umrahAccess) { setUmrahRequests([]); return; }
+        const unsub = onSnapshot(
+            query(collection(db, "umrahApplications"), orderBy("applicationDate", "desc")),
+            (snap) => setUmrahRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+            (e) => console.error("umrahApplications onSnapshot error:", e)
+        );
+        return () => unsub();
+    }, [userData?.umrahAccess]);
+
     // Revenue KPI (country-scoped) — feeds the Total Revenue card + /subadmin/revenue page
     const [countryRevenue, setCountryRevenue] = useState(0);
     useEffect(() => {
@@ -676,6 +689,7 @@ export default function SubAdminPanel() {
     const navItems = [
         { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
         { id: "visas", label: "Visa Applications", icon: <FaPassport /> },
+        ...(userData?.umrahAccess ? [{ id: "umrah", label: "Umrah Requests", icon: <FaKaaba /> }] : []),
         { id: "messages", label: "Messages", icon: <MdEmail /> },
     ];
 
@@ -1826,6 +1840,11 @@ export default function SubAdminPanel() {
                             </div>
                             <Pagination total={filteredVisas.length} page={visaPage} onChange={setVisaPage} />
                         </div>
+                    )}
+
+                    {/* =================== UMRAH REQUESTS TAB =================== */}
+                    {activeTab === "umrah" && userData?.umrahAccess && (
+                        <UmrahProcessList requests={umrahRequests} actorRole="subAdmin" actorName={userData?.displayName || currentUser?.email || "Sub-Admin"} />
                     )}
 
                     {/* =================== MESSAGES TAB =================== */}

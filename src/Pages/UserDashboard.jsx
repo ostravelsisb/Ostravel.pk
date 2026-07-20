@@ -16,7 +16,46 @@ import ToastContainer, { notify } from '../Components/Toast';
 const UserDashboard = () => {
     const { currentUser } = useAuth();
     const [activeTab, setActiveTab] = useState('visa');
+    const [uploadingDocId, setUploadingDocId] = useState(null);
+
+    // Applicant uploads a document an admin/subadmin requested for an Umrah
+    // booking. Writes straight into that request's documentRequests[] array —
+    // the admin panel's live listener picks it up instantly, no refresh needed.
+    const handleUmrahDocUpload = async (umrahRequest, docEntry, file) => {
+        if (!file || !currentUser) return;
+
+        if (file.size < 10 * 1024 || file.size > 10 * 1024 * 1024) {
+            alert('File size must be between 10KB and 10MB.');
+            return;
+        }
+        if (!['image/jpeg', 'image/png'].includes(file.type)) {
+            alert('Only JPG or PNG images are accepted.');
+            return;
+        }
+
+        setUploadingDocId(docEntry.id);
+        try {
+            const fileUrl = await uploadFile(file, `${umrahRequest.requestNumber}_${docEntry.id}`);
+
+            const updatedDocs = (umrahRequest.documentRequests || []).map(d =>
+                d.id === docEntry.id
+                    ? { ...d, status: 'Uploaded', fileUrl, fileName: file.name, uploadedAt: new Date().toISOString(), note: '' }
+                    : d
+            );
+
+            await updateDoc(doc(db, 'umrahApplications', umrahRequest.id), {
+                documentRequests: updatedDocs,
+                updatedAt: new Date().toISOString(),
+            });
+        } catch (err) {
+            console.error('Failed to upload umrah document:', err);
+            alert('Upload failed. Please try again.');
+        } finally {
+            setUploadingDocId(null);
+        }
+    };
     const [visaApplications, setVisaApplications] = useState([]);
+    const [umrahRequests, setUmrahRequests] = useState([]);
     const [policies, setPolicies] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -154,7 +193,22 @@ const UserDashboard = () => {
         };
         fetchPolicies();
 
-        return () => visasUnsub();
+        // 4. Umrah requests — realtime, so a payment request from admin/subadmin
+        // shows up instantly with a Pay Now button.
+        const umrahQ = query(
+            collection(db, 'umrahApplications'),
+            where('uid', '==', currentUser.uid),
+            orderBy('applicationDate', 'desc')
+        );
+        const umrahUnsub = onSnapshot(
+            umrahQ,
+            (snapshot) => {
+                setUmrahRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+            },
+            (error) => console.error("❌ Error listening to umrah requests:", error)
+        );
+
+        return () => { visasUnsub(); umrahUnsub(); };
     }, [currentUser]);
 
     const getStatusBadge = (status) => {
@@ -397,6 +451,12 @@ const UserDashboard = () => {
                     <button onClick={() => setActiveTab('insurance')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'insurance' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
                         Insurance Policies ({filteredPolicies.length})
                     </button>
+                    <button onClick={() => setActiveTab('umrah')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all relative ${activeTab === 'umrah' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        Umrah Requests ({umrahRequests.length})
+                        {umrahRequests.some(r => r.status === 'Payment Requested') && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-white animate-pulse" />
+                        )}
+                    </button>
                 </div>
 
                 {/* Content Area */}
@@ -487,7 +547,7 @@ const UserDashboard = () => {
                                 </table>
                             </div>
                         </motion.div>
-                    ) : (
+                    ) : activeTab === 'insurance' ? (
                         <motion.div key="insurance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
                             {/* Insurance Table (Same as before) */}
                             <div className="overflow-x-auto">
@@ -520,6 +580,120 @@ const UserDashboard = () => {
                                     </tbody>
                                 </table>
                             </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div key="umrah" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                            {umrahRequests.length === 0 ? (
+                                <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-12 text-center">
+                                    <p className="text-slate-500 font-bold">No Umrah requests yet</p>
+                                    <p className="text-sm text-slate-400 mt-1">Submit a request from the Hajj & Umrah page to get a custom quote.</p>
+                                </div>
+                            ) : (
+                                umrahRequests.map((r) => (
+                                    <div key={r.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                            <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p className="font-black text-slate-900">{r.makkah?.hotel}</p>
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                                        r.status === 'Payment Requested' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                        r.status === 'Documents Required' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                        r.status === 'Paid' || r.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                        r.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+                                                        r.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        'bg-amber-50 text-amber-700 border-amber-200'
+                                                    }`}>
+                                                        {r.status || 'Pending Review'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-400 font-mono mt-0.5">{r.requestNumber}</p>
+                                                <p className="text-sm text-slate-500 mt-2">
+                                                    {r.makkah?.checkIn} → {r.makkah?.checkOut} · {r.makkah?.nights || 0} nights · {r.makkah?.rooms || 1} room(s)
+                                                </p>
+                                                {r.paymentNote && r.status === 'Payment Requested' && (
+                                                    <p className="text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 mt-3 max-w-md">{r.paymentNote}</p>
+                                                )}
+
+                                                {r.documentRequests?.length > 0 && (
+                                                    <div className="mt-4 space-y-2 max-w-md">
+                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Documents Requested</p>
+                                                        {r.documentRequests.map((d) => (
+                                                            <div key={d.id} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="font-bold text-slate-800 text-sm truncate">{d.name}</p>
+                                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                                                        d.status === 'Verified' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                                        d.status === 'Uploaded' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                        d.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+                                                                        'bg-orange-50 text-orange-700 border-orange-200'
+                                                                    }`}>
+                                                                        {d.status}
+                                                                    </span>
+                                                                    {d.status === 'Rejected' && d.note && (
+                                                                        <p className="text-xs text-red-600 mt-1">Reason: {d.note}</p>
+                                                                    )}
+                                                                </div>
+                                                                <div className="shrink-0">
+                                                                    {(d.status === 'Requested' || d.status === 'Rejected') ? (
+                                                                        <label className={`px-3 py-2 rounded-lg text-xs font-black cursor-pointer flex items-center gap-1.5 transition ${uploadingDocId === d.id ? 'bg-slate-200 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                                                                            <HiUpload className="w-4 h-4" />
+                                                                            {uploadingDocId === d.id ? 'Uploading...' : d.status === 'Rejected' ? 'Re-upload' : 'Upload'}
+                                                                            <input
+                                                                                type="file"
+                                                                                accept="image/jpeg,image/png"
+                                                                                className="hidden"
+                                                                                disabled={uploadingDocId === d.id}
+                                                                                onChange={(e) => e.target.files?.[0] && handleUmrahDocUpload(r, d, e.target.files[0])}
+                                                                            />
+                                                                        </label>
+                                                                    ) : d.fileUrl ? (
+                                                                        <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-1.5">
+                                                                            <HiEye className="w-4 h-4" /> View
+                                                                        </a>
+                                                                    ) : null}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="text-right shrink-0">
+                                                {r.status === 'Payment Requested' && r.paymentStatus !== 'Paid' ? (
+                                                    <>
+                                                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">Amount Due</p>
+                                                        <p className="text-2xl font-black text-purple-700 mb-3">PKR {Number(r.paymentAmount || 0).toLocaleString()}</p>
+                                                        <button
+                                                            onClick={() => {
+                                                                localStorage.setItem('pending_umrah_payment', JSON.stringify({
+                                                                    umrahDocId: r.id,
+                                                                    requestNumber: r.requestNumber,
+                                                                    applicantName: r.user?.name || r.userName,
+                                                                    email: r.userEmail || r.user?.email || currentUser?.email,
+                                                                    phone: r.user?.contact,
+                                                                    hotel: r.makkah?.hotel,
+                                                                    checkIn: r.makkah?.checkIn,
+                                                                    checkOut: r.makkah?.checkOut,
+                                                                    paymentAmount: r.paymentAmount,
+                                                                    paymentNote: r.paymentNote,
+                                                                }));
+                                                                window.location.href = '/umrah-payment';
+                                                            }}
+                                                            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-sm shadow-lg shadow-purple-200 transition"
+                                                        >
+                                                            Pay Now
+                                                        </button>
+                                                    </>
+                                                ) : r.paymentAmount ? (
+                                                    <p className="text-sm font-bold text-emerald-600">PKR {Number(r.paymentAmount).toLocaleString()} — {r.paymentStatus}</p>
+                                                ) : (
+                                                    <p className="text-xs text-slate-400 font-medium max-w-[160px]">Awaiting quote from our team</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>

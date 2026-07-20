@@ -122,7 +122,7 @@ const ensureUserDocument = async (user, displayNameOverride) => {
  * @param {string} createdByUid - UID of the admin creating this sub-admin
  * @returns {Promise} User credential
  */
-const createSubAdmin = async (email, password, displayName, assignedCountries = [], createdByUid) => {
+const createSubAdmin = async (email, password, displayName, assignedCountries = [], createdByUid, umrahAccess = false) => {
   try {
     const userCred = await createUserWithEmailAndPassword(auth, email, password);
 
@@ -138,6 +138,7 @@ const createSubAdmin = async (email, password, displayName, assignedCountries = 
       displayName: displayName || "",
       role: "subAdmin",
       assignedCountries: assignedCountries,
+      umrahAccess: !!umrahAccess,
       createdBy: createdByUid,
       createdAt: new Date().toISOString(),
       isActive: true,

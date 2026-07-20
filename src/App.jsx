@@ -58,6 +58,7 @@ const RevenueDetails = lazy(() => import('./Pages/RevenueDetails'));
 // --- Visa Application Pages ---
 const ApplyVisa = lazy(() => import('./Pages/ApplyVisa'));
 const VisaPayment = lazy(() => import('./Pages/VisaPayment'));
+const UmrahPayment = lazy(() => import('./Pages/UmrahPayment'));
 const VisaConfirmation = lazy(() => import('./Pages/VisaConfirmation'));
 
 function SupportWidget() {
@@ -131,6 +132,7 @@ function App() {
               {/* --- VISA APPLICATION ROUTES --- */}
               <Route path="/apply-visa" element={<ApplyVisa />} />
               <Route path="/visa-payment" element={<VisaPayment />} />
+              <Route path="/umrah-payment" element={<UmrahPayment />} />
               <Route path="/visa-confirmation" element={<VisaConfirmation />} />
 
               {/* --- ADMIN AUTH ROUTES --- */}

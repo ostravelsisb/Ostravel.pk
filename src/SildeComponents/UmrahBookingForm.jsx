@@ -2,9 +2,14 @@ import React, { useState, useEffect } from "react";
 import { db } from "../firbase"; // Note the typo in filename 'firbase.js' matches existing project
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaCheckCircle, FaCalendarAlt, FaHotel, FaCar, FaUser, FaEnvelope, FaPhone } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../Context/AuthContext";
+import { FaCheckCircle, FaCalendarAlt, FaHotel, FaCar, FaUser, FaEnvelope, FaPhone, FaIdCard, FaPassport } from "react-icons/fa";
 
 export default function UmrahBookingForm() {
+    const navigate = useNavigate();
+    const { currentUser } = useAuth();
+
     // --- Form State ---
     const [formData, setFormData] = useState({
         services: {
@@ -25,8 +30,12 @@ export default function UmrahBookingForm() {
         },
         user: {
             name: "",
-            email: "",
+            email: currentUser?.email || "",
             contact: "",
+            cnic: "",
+            passportNumber: "",
+            travelers: 1,
+            notes: "",
         },
     });
 
@@ -55,6 +64,13 @@ export default function UmrahBookingForm() {
             }
         }
     }, [formData.makkah.checkIn, formData.makkah.checkOut]);
+
+    // Keep the email field synced to the logged-in account
+    useEffect(() => {
+        if (currentUser?.email) {
+            setFormData((prev) => ({ ...prev, user: { ...prev.user, email: currentUser.email } }));
+        }
+    }, [currentUser]);
 
     // --- Handlers ---
     const handleServiceChange = (e) => {
@@ -91,25 +107,46 @@ export default function UmrahBookingForm() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
         setErrorMsg("");
+
+        // Require login so the request can be tracked in the user's dashboard
+        // and matched back to them once admin/sub-admin processes it.
+        if (!currentUser) {
+            setErrorMsg("Please log in first so we can save this request to your account.");
+            setTimeout(() => navigate('/login', { state: { redirectTo: '/haj' } }), 1200);
+            return;
+        }
 
         // Basic Validation
         if (!formData.user.name || !formData.user.contact) {
             setErrorMsg("Please provide your Name and Contact Number.");
-            setLoading(false);
             return;
         }
 
+        setLoading(true);
         try {
-            await addDoc(collection(db, "umardet"), {
+            const requestNumber = `UM-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+
+            await addDoc(collection(db, "umrahApplications"), {
                 ...formData,
+                requestNumber,
+                uid: currentUser.uid,
+                userId: currentUser.uid,
+                userEmail: currentUser.email,
+                userName: formData.user.name,
+                status: "Pending Review", // Awaiting admin/sub-admin review
+                paymentRequested: false,
+                paymentAmount: null,
+                paymentNote: "",
+                paymentStatus: "Unpaid",
                 createdAt: serverTimestamp(),
-                status: "Pending", // For Admin tracking
+                applicationDate: new Date().toISOString(),
+                statusHistory: [
+                    { status: "Pending Review", timestamp: new Date().toISOString(), updatedBy: "system" }
+                ],
             });
+
             setShowSuccess(true);
-            // Reset form (optional, keeping it filled might be better for user reference, but standard is reset)
-            // setFormData({...initialState}) 
         } catch (err) {
             console.error("Error submitting form: ", err);
             setErrorMsg("Something went wrong. Please try again or contact us directly.");
@@ -123,6 +160,11 @@ export default function UmrahBookingForm() {
             <div className="bg-blue-600 p-6 text-white text-center">
                 <h2 className="text-2xl font-bold">Build Your Custom Package</h2>
                 <p className="opacity-90 text-sm">Select your preferences and get a quote</p>
+                {!currentUser && (
+                    <p className="mt-2 text-xs bg-white/15 rounded-lg py-1.5 px-3 inline-block font-semibold">
+                        You'll need to be logged in to submit — we'll ask at the end.
+                    </p>
+                )}
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-8">
@@ -284,9 +326,9 @@ export default function UmrahBookingForm() {
                 {/* 4. User Info */}
                 <section className="bg-slate-50 p-6 rounded-xl border border-slate-200">
                     <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <FaUser className="text-blue-500" /> Contact Details
+                        <FaUser className="text-blue-500" /> Contact & Traveler Details
                     </h3>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-gray-600 mb-1">Your Name</label>
                             <input
@@ -300,7 +342,7 @@ export default function UmrahBookingForm() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-600 mb-1">Emails</label>
+                            <label className="block text-sm font-semibold text-gray-600 mb-1">Email</label>
                             <div className="relative">
                                 <FaEnvelope className="absolute left-3 top-3 text-gray-400" />
                                 <input
@@ -328,6 +370,55 @@ export default function UmrahBookingForm() {
                                 />
                             </div>
                         </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-600 mb-1">CNIC</label>
+                            <div className="relative">
+                                <FaIdCard className="absolute left-3 top-3 text-gray-400" />
+                                <input
+                                    type="text"
+                                    name="cnic"
+                                    value={formData.user.cnic}
+                                    onChange={handleUserChange}
+                                    placeholder="13 digits, no dashes"
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-600 mb-1">Passport Number</label>
+                            <div className="relative">
+                                <FaPassport className="absolute left-3 top-3 text-gray-400" />
+                                <input
+                                    type="text"
+                                    name="passportNumber"
+                                    value={formData.user.passportNumber}
+                                    onChange={handleUserChange}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-600 mb-1">Total Pilgrims</label>
+                            <input
+                                type="number"
+                                min="1"
+                                name="travelers"
+                                value={formData.user.travelers}
+                                onChange={handleUserChange}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-gray-600 mb-1">Additional Notes</label>
+                            <textarea
+                                name="notes"
+                                value={formData.user.notes}
+                                onChange={handleUserChange}
+                                rows={3}
+                                placeholder="Anything else we should know (elderly travelers, wheelchair access, etc.)"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
                     </div>
                 </section>
 
@@ -344,6 +435,10 @@ export default function UmrahBookingForm() {
                 >
                     {loading ? "Submitting Request..." : "Start Booking / Get Quote"}
                 </button>
+
+                <p className="text-center text-xs text-slate-400">
+                    Our Hajj & Umrah team will review your request and send a quote with a secure payment link to your dashboard.
+                </p>
 
             </form>
 
@@ -367,13 +462,13 @@ export default function UmrahBookingForm() {
                             </div>
                             <h3 className="text-2xl font-extrabold text-gray-900 mb-2">Request Received!</h3>
                             <p className="text-gray-600 mb-6">
-                                Thanks for choosing us. We will calculate the best price and send the details to your email and phone number shortly.
+                                Thanks for choosing us. Our team will review your request and send a quote with a payment link to your dashboard.
                             </p>
                             <button
-                                onClick={() => setShowSuccess(false)}
+                                onClick={() => { setShowSuccess(false); navigate('/dashboard'); }}
                                 className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition"
                             >
-                                Close
+                                Go to My Dashboard
                             </button>
                         </motion.div>
                     </motion.div>

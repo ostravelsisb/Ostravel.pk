@@ -210,6 +210,45 @@ export const sendConsolidatedUpdateEmail = async ({
     }
 };
 
+// ─── NEW: single consolidated email for Umrah ────────────────────────────────
+// Mirrors sendConsolidatedUpdateEmail but for the Umrah field shape. Bundles
+// status change + document actions + payment request into ONE email, fired
+// only from the per-row "Notify" button — never automatically.
+export const sendUmrahConsolidatedEmail = async ({
+    to,
+    applicantName,
+    requestNumber,
+    hotel,
+    checkIn,
+    checkOut,
+    statusChange,     // { oldStatus, newStatus } | null
+    documentActions,  // [{ docLabel, action: 'requested'|'verified'|'rejected'|'removed', message? }]
+    paymentChange,    // { amount, note } | null — set when a payment request was (re)sent
+}) => {
+    if (!to) return { skipped: true };
+    try {
+        const res = await fetch(`${EMAIL_API_BASE}/umrah-consolidated-update`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                to,
+                applicantName,
+                requestNumber,
+                hotel,
+                checkIn,
+                checkOut,
+                statusChange: statusChange || null,
+                documentActions: documentActions || [],
+                paymentChange: paymentChange || null,
+            }),
+        });
+        return { ok: res.ok };
+    } catch (err) {
+        console.error("Failed to send umrah consolidated-update email:", err);
+        return { ok: false, error: err };
+    }
+};
+
 // ─── NEW: invoice email (PDF attached) ───────────────────────────────────────
 // Fired right after a visa/insurance payment is saved to Firestore in
 // PaymentReturn.jsx. Backend builds a proper PDF invoice and attaches it.

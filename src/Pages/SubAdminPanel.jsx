@@ -11,6 +11,7 @@ import { FaUserShield, FaPassport, FaRegPaperPlane, FaKaaba } from "react-icons/
 import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp, where, onSnapshot } from "firebase/firestore";
 import { db, signOut } from "../firbase";
 import UmrahProcessList from "../Components/UmrahProcessList";
+import VisaDocumentRequests from "../Components/VisaDocumentRequests";
 import { useAuth } from "../Context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -223,24 +224,23 @@ const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
                                 const colors = statusColors[status];
                                 const isActive = currentStatus === status;
                                 return (
-                                    <motion.button
+                                    <button
                                         key={status}
-                                        whileHover={{ backgroundColor: isActive ? undefined : colors.bg }}
                                         onClick={() => {
                                             onChange({ target: { value: status } });
                                             setIsOpen(false);
                                         }}
-                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-[13px] font-bold transition-colors duration-150 ${
                                             isActive
                                                 ? `${colors.bg} ${colors.text} border-2 ${colors.border} shadow-md`
-                                                : `text-gray-700 hover:${colors.bg}`
+                                                : `text-gray-700 hover:bg-gray-100 hover:text-gray-900`
                                         }`}
                                     >
                                         <div className="flex items-center gap-2">
                                             <div className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
                                             {status}
                                         </div>
-                                    </motion.button>
+                                    </button>
                                 );
                             })}
                         </div>
@@ -1773,6 +1773,7 @@ export default function SubAdminPanel() {
                                                         applicant={v}
                                                         onStage={stagePendingChange}
                                                     />
+                                                    <VisaDocumentRequests visa={v} />
                                                 </div>
                                             </div>
 

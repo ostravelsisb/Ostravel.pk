@@ -260,7 +260,7 @@ function Navbar() {
           <div className="flex gap-2 xl:gap-6 items-center flex-shrink-0">
             {/* Currency Selector */}
             <div className="relative group flex-shrink-0">
-              <select
+              {/* <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
                 className="cursor-pointer bg-transparent border border-gray-300 text-gray-700 py-1.5 px-2 xl:px-3 rounded-full hover:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs xl:text-sm font-bold transition-all"
@@ -268,7 +268,7 @@ function Navbar() {
                 {currencies.map(curr => (
                   <option key={curr} value={curr}>{curr}</option>
                 ))}
-              </select>
+              </select> */}
             </div>
 
             {/* --- AUTH CONDITIONAL RENDERING --- */}

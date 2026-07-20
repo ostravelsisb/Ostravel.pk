@@ -5,7 +5,7 @@ import { useAuth } from "../Context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     MdAdd, MdEdit, MdDelete, MdClose, MdCheckCircle, MdBlock,
-    MdPerson, MdEmail, MdPublic, MdSave, MdCancel
+    MdPerson, MdEmail, MdPublic, MdSave, MdCancel, MdVerifiedUser
 } from "react-icons/md";
 import { FaUserShield, FaGlobe } from "react-icons/fa";
 import { logSubAdminCreation, logSubAdminUpdate } from "../Utils/activityLogger";
@@ -39,6 +39,7 @@ export default function SubAdminManagement() {
     });
     const [formError, setFormError] = useState("");
     const [formLoading, setFormLoading] = useState(false);
+    const [countrySearch, setCountrySearch] = useState("");
 
     // Fetch all sub-admins
     useEffect(() => {
@@ -223,54 +224,59 @@ export default function SubAdminManagement() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="max-w-6xl mx-auto space-y-8 pb-12">
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-800">Sub-Admin Management</h2>
-                    <p className="text-sm text-slate-500 mt-1">Manage sub-admin accounts and country assignments</p>
+                    <h2 className="text-3xl font-black text-slate-800">Sub-Admin Management</h2>
+                    <p className="text-sm text-slate-500 mt-1.5">Manage sub-admin accounts, permissions, and country assignments</p>
                 </div>
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
-                >
-                    <MdAdd className="text-xl" />
-                    Create Sub-Admin
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shrink-0">
+                        <MdVerifiedUser className="text-base" /> Secured Panel
+                    </div>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/25 hover:shadow-xl hover:-translate-y-0.5"
+                    >
+                        <MdAdd className="text-xl" />
+                        Create Sub-Admin
+                    </button>
+                </div>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                            <FaUserShield className="text-blue-600 text-xl" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center shrink-0">
+                            <FaUserShield className="text-blue-600 text-2xl" />
                         </div>
                         <div>
                             <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Total Sub-Admins</p>
-                            <p className="text-2xl font-black text-slate-800">{subAdmins.length}</p>
+                            <p className="text-3xl font-black text-slate-800 mt-0.5">{subAdmins.length}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                            <MdCheckCircle className="text-emerald-600 text-xl" />
+                <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center shrink-0">
+                            <MdCheckCircle className="text-emerald-600 text-2xl" />
                         </div>
                         <div>
                             <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Active</p>
-                            <p className="text-2xl font-black text-emerald-600">{subAdmins.filter(sa => sa.isActive).length}</p>
+                            <p className="text-3xl font-black text-emerald-600 mt-0.5">{subAdmins.filter(sa => sa.isActive).length}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-                            <MdBlock className="text-red-600 text-xl" />
+                <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center shrink-0">
+                            <MdBlock className="text-red-600 text-2xl" />
                         </div>
                         <div>
                             <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Inactive</p>
-                            <p className="text-2xl font-black text-red-600">{subAdmins.filter(sa => !sa.isActive).length}</p>
+                            <p className="text-3xl font-black text-red-600 mt-0.5">{subAdmins.filter(sa => !sa.isActive).length}</p>
                         </div>
                     </div>
                 </div>
@@ -288,46 +294,72 @@ export default function SubAdminManagement() {
                     </div>
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                     {subAdmins.map((subAdmin) => (
                         <div
                             key={subAdmin.id}
-                            className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all p-4 sm:p-5"
+                            className={`bg-white rounded-2xl border shadow-sm transition-all p-6 ${
+                                editingSubAdmin === subAdmin.id ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200 hover:shadow-md hover:border-slate-300'
+                            }`}
                         >
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div className="flex flex-col lg:flex-row lg:items-center gap-5">
                                 {/* Identity */}
-                                <div className="flex items-center gap-3 sm:w-56 shrink-0">
-                                    <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-black shrink-0">
+                                <div className="flex items-center gap-4 lg:w-64 shrink-0">
+                                    <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shrink-0 shadow-md">
                                         {subAdmin.displayName?.charAt(0).toUpperCase() || "S"}
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="font-bold text-slate-800 truncate">{subAdmin.displayName}</p>
-                                        <p className="text-xs text-slate-500 truncate">{subAdmin.email}</p>
+                                        <p className="font-bold text-slate-800 truncate text-base">{subAdmin.displayName}</p>
+                                        <p className="text-sm text-slate-500 truncate">{subAdmin.email}</p>
                                     </div>
                                 </div>
 
                                 {/* Countries */}
                                 <div className="flex-1 min-w-0">
                                     {editingSubAdmin === subAdmin.id ? (
-                                        <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/60">
-                                            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                                                {ASIAN_COUNTRIES.slice(0, 10).map(country => (
-                                                    <button
-                                                        key={country}
-                                                        onClick={() => handleCountryToggle(country)}
-                                                        className={`text-xs px-2.5 py-1 rounded-full font-bold transition-all ${formData.assignedCountries.includes(country)
-                                                                ? "bg-blue-600 text-white"
-                                                                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
-                                                            }`}
-                                                    >
-                                                        {country}
-                                                    </button>
-                                                ))}
+                                        <div className="border-2 border-blue-200 rounded-2xl p-4 bg-blue-50/40">
+                                            <div className="flex items-center justify-between gap-3 mb-3">
+                                                <p className="text-xs font-black text-blue-700 uppercase tracking-wider">
+                                                    Editing Countries ({formData.assignedCountries.length} selected)
+                                                </p>
+                                                <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer shrink-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!subAdmin.umrahAccess}
+                                                        onChange={() => handleToggleUmrahAccess(subAdmin.id, !subAdmin.umrahAccess)}
+                                                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                                                    />
+                                                    🕋 Umrah Access
+                                                </label>
                                             </div>
-                                            <p className="text-xs text-slate-400 mt-2">+ {ASIAN_COUNTRIES.length - 10} more countries available</p>
+                                            <input
+                                                type="text"
+                                                value={countrySearch}
+                                                onChange={(e) => setCountrySearch(e.target.value)}
+                                                placeholder="Search countries..."
+                                                className="w-full px-3 py-2 mb-3 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+                                            />
+                                            <div className="flex flex-wrap gap-1.5 max-h-52 overflow-y-auto pr-1">
+                                                {ASIAN_COUNTRIES
+                                                    .filter(c => c.toLowerCase().includes(countrySearch.trim().toLowerCase()))
+                                                    .map(country => (
+                                                        <button
+                                                            key={country}
+                                                            type="button"
+                                                            onClick={() => handleCountryToggle(country)}
+                                                            className={`text-xs px-2.5 py-1.5 rounded-full font-bold transition-all ${formData.assignedCountries.includes(country)
+                                                                    ? "bg-blue-600 text-white shadow-sm"
+                                                                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
+                                                                }`}
+                                                        >
+                                                            {formData.assignedCountries.includes(country) && "✓ "}
+                                                            {country}
+                                                        </button>
+                                                    ))}
+                                            </div>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-wrap items-center gap-1.5">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <FaGlobe className="text-slate-300 text-xs shrink-0" />
                                             {subAdmin.assignedCountries?.length > 0 ? (
                                                 <>
@@ -360,8 +392,8 @@ export default function SubAdminManagement() {
                                 </div>
 
                                 {/* Status + created */}
-                                <div className="flex items-center gap-3 sm:w-44 shrink-0">
-                                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black ${subAdmin.isActive
+                                <div className="flex items-center gap-3 lg:w-44 shrink-0">
+                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black ${subAdmin.isActive
                                             ? "bg-emerald-50 text-emerald-700"
                                             : "bg-red-50 text-red-700"
                                         }`}>
@@ -374,25 +406,26 @@ export default function SubAdminManagement() {
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex items-center gap-2 shrink-0 sm:justify-end">
+                                <div className="flex items-center gap-2 shrink-0 lg:justify-end">
                                     {editingSubAdmin === subAdmin.id ? (
                                         <>
                                             <button
                                                 onClick={() => handleUpdateCountries(subAdmin.id, formData.assignedCountries)}
-                                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all"
+                                                className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-sm"
                                                 title="Save"
                                             >
-                                                <MdSave className="text-lg" />
+                                                <MdSave className="text-lg" /> Save
                                             </button>
                                             <button
                                                 onClick={() => {
                                                     setEditingSubAdmin(null);
+                                                    setCountrySearch("");
                                                     setFormData({ ...formData, assignedCountries: [] });
                                                 }}
-                                                className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-all"
+                                                className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
                                                 title="Cancel"
                                             >
-                                                <MdCancel className="text-lg" />
+                                                <MdCancel className="text-lg" /> Cancel
                                             </button>
                                         </>
                                     ) : (
@@ -400,16 +433,17 @@ export default function SubAdminManagement() {
                                             <button
                                                 onClick={() => {
                                                     setEditingSubAdmin(subAdmin.id);
+                                                    setCountrySearch("");
                                                     setFormData({ ...formData, assignedCountries: subAdmin.assignedCountries || [] });
                                                 }}
-                                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
+                                                className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
                                                 title="Edit Countries"
                                             >
                                                 <MdEdit className="text-lg" />
                                             </button>
                                             <button
                                                 onClick={() => handleToggleActive(subAdmin.id, subAdmin.isActive)}
-                                                className={`p-2 rounded-lg transition-all ${subAdmin.isActive
+                                                className={`p-2.5 rounded-xl transition-all ${subAdmin.isActive
                                                         ? "bg-red-50 text-red-600 hover:bg-red-600 hover:text-white"
                                                         : "bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white"
                                                     }`}

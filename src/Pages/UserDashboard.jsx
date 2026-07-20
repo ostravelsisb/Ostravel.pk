@@ -7,7 +7,7 @@ const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
 import { useAuth } from '../Context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt, HiReceiptTax } from 'react-icons/hi'; // Added HiChatAlt, HiReceiptTax
-import { updateApplicationData, markMessageSeen, hasUnseenMessage, saveUserMessage } from '../Utils/ApplicationEditUtils';
+import { updateApplicationData, markMessageSeen, hasUnseenMessage, saveUserMessage, markBadgeSeen, hasUnseenBadge } from '../Utils/ApplicationEditUtils';
 import { getCachedData, setCachedData } from '../Utils/cacheUtils';
 import { getAllCountryNames, getVisaDataByCountry } from '../Data/visaData'; // Import country data
 import InvoiceModal from '../Components/InvoiceModal';
@@ -313,6 +313,33 @@ const UserDashboard = () => {
 
             await updateApplicationData(editingVisa.id, 'visaApplications', updatedData, true, uploadedKeys);
 
+            // Upload any files selected for admin-named ("CNIC Front" style)
+            // document requests, and flip their status to Uploaded.
+            const pendingCustomDocs = (editingVisa.documentRequests || []).filter(
+                (d) => fileInputs[`custom_${d.id}`]
+            );
+            if (pendingCustomDocs.length > 0) {
+                setUploadingFiles(true);
+                const updatedRequests = [...(editingVisa.documentRequests || [])];
+                for (const docItem of pendingCustomDocs) {
+                    const file = fileInputs[`custom_${docItem.id}`];
+                    const path = `${editingVisa.applicationNumber}_${docItem.name}_${Date.now()}`;
+                    const url = await uploadFile(file, path);
+                    const idx = updatedRequests.findIndex((d) => d.id === docItem.id);
+                    if (idx !== -1) {
+                        updatedRequests[idx] = {
+                            ...updatedRequests[idx],
+                            status: 'Uploaded',
+                            fileUrl: url,
+                            fileName: file.name,
+                            uploadedAt: new Date().toISOString(),
+                        };
+                    }
+                }
+                await updateApplicationData(editingVisa.id, 'visaApplications', { documentRequests: updatedRequests });
+                setUploadingFiles(false);
+            }
+
             // Clear only the files that were just uploaded — if other
             // requested documents are still pending, the modal stays open
             // and (thanks to the realtime listener) will re-filter itself
@@ -320,6 +347,7 @@ const UserDashboard = () => {
             setFileInputs((prev) => {
                 const next = { ...prev };
                 uploadedKeys.forEach((key) => delete next[key]);
+                pendingCustomDocs.forEach((d) => delete next[`custom_${d.id}`]);
                 return next;
             });
 
@@ -364,6 +392,15 @@ const UserDashboard = () => {
     const handleFileSelect = (key, e) => {
         if (e.target.files[0]) {
             setFileInputs({ ...fileInputs, [key]: e.target.files[0] });
+        }
+    };
+
+    // Selecting a file for a dynamically admin-named document request
+    // (e.g. "CNIC Front" typed in by admin) — keyed by request id, uploaded
+    // and saved separately from the fixed document set on Save.
+    const handleCustomDocFileSelect = (docId, e) => {
+        if (e.target.files[0]) {
+            setFileInputs((prev) => ({ ...prev, [`custom_${docId}`]: e.target.files[0] }));
         }
     };
 
@@ -481,10 +518,13 @@ const UserDashboard = () => {
                                                     <div className="font-bold text-slate-900">{visa.applicantName || 'N/A'}</div>
                                                     <div className="text-sm text-slate-500">{visa.email}</div>
                                                     {/* Admin Message Indicator — only shown until the user dismisses this exact message */}
-                                                    {hasUnseenMessage(visa) && (
+                                                    {hasUnseenBadge(visa) && (
                                                         <button
-                                                            onClick={() => markMessageSeen(visa.id, 'visaApplications', visa.adminMessageAt || null)}
-                                                            title="Click to dismiss"
+                                                            onClick={() => {
+                                                                setViewingVisa(visa);
+                                                                markBadgeSeen(visa.id, 'visaApplications', visa.adminMessageAt || null);
+                                                            }}
+                                                            title="Click to view message"
                                                             className="mt-1 flex items-center gap-1 text-xs text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-200 w-fit hover:bg-amber-100 transition-colors"
                                                         >
                                                             <HiChatAlt /> Msg from Admin
@@ -515,12 +555,7 @@ const UserDashboard = () => {
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
-                                                            onClick={() => {
-                                                                setViewingVisa(visa);
-                                                                if (hasUnseenMessage(visa)) {
-                                                                    markMessageSeen(visa.id, 'visaApplications', visa.adminMessageAt || null);
-                                                                }
-                                                            }}
+                                                            onClick={() => setViewingVisa(visa)}
                                                             className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold"
                                                         >
                                                             <HiEye className="w-4 h-4" /> View
@@ -531,7 +566,7 @@ const UserDashboard = () => {
                                                         >
                                                             <HiReceiptTax className="w-4 h-4" /> Invoice
                                                         </button>
-                                                        {visa.editApproved && (
+                                                        {(visa.editApproved || (visa.documentRequests || []).some(d => d.status === 'Requested' || d.status === 'Rejected')) && (
                                                             <button
                                                                 onClick={() => handleEditVisa(visa)}
                                                                 className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors text-xs font-bold"
@@ -1007,8 +1042,13 @@ const UserDashboard = () => {
                                 // Only docs the admin has explicitly flagged for re-upload
                                 // (via the "Re-upload" action) show up here.
                                 const editableDocs = allDocs.filter(d => !!editApprovedDocs[d.key]);
+                                // Admin-named document requests (e.g. "CNIC Front" typed
+                                // in by admin) that are still awaiting an upload/re-upload.
+                                const customDocs = (editingVisa.documentRequests || []).filter(
+                                    d => d.status === 'Requested' || d.status === 'Rejected'
+                                );
 
-                                if (editableDocs.length === 0) {
+                                if (editableDocs.length === 0 && customDocs.length === 0) {
                                     return (
                                         <div className="flex flex-col items-center justify-center py-16 text-center">
                                             <HiDocument className="w-10 h-10 text-slate-300 mb-3" />
@@ -1049,6 +1089,32 @@ const UserDashboard = () => {
                                                 </div>
                                             );
                                         })}
+                                        {customDocs.map(docItem => (
+                                            <div key={docItem.id} className="rounded-lg border p-4 bg-white border-slate-200">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">{docItem.name}</label>
+                                                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${docItem.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {docItem.status === 'Rejected' ? '✕ Rejected — Re-upload' : '⚠ Upload Requested'}
+                                                    </span>
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    onChange={(e) => handleCustomDocFileSelect(docItem.id, e)}
+                                                    className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-500 file:text-white hover:file:bg-emerald-600 file:cursor-pointer file:transition-colors"
+                                                    accept="image/*,.pdf"
+                                                />
+                                                {fileInputs[`custom_${docItem.id}`] ? (
+                                                    <p className="text-xs text-emerald-600 mt-2 font-medium flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full"></span>
+                                                        New file selected: {fileInputs[`custom_${docItem.id}`].name}
+                                                    </p>
+                                                ) : docItem.status === 'Rejected' && docItem.note ? (
+                                                    <p className="text-xs text-red-600 mt-2 font-medium">
+                                                        Reason: {docItem.note}
+                                                    </p>
+                                                ) : null}
+                                            </div>
+                                        ))}
                                     </div>
                                 );
                             })()}

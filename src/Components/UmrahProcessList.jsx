@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../firbase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { sendUmrahStatusEmail } from '../Utils/emailService';
+import { sendUmrahConsolidatedEmail } from '../Utils/emailService';
 import {
     FaKaaba, FaHotel, FaCar, FaUser, FaPhone, FaEnvelope, FaMoneyBillWave,
     FaSearch, FaTimes, FaCheckCircle, FaFileUpload, FaFileAlt, FaPlus,
@@ -23,6 +23,87 @@ const statusColor = (status) => ({
     "Completed": "bg-teal-50 text-teal-700 border-teal-200",
     "Rejected": "bg-red-50 text-red-600 border-red-200",
 }[status] || "bg-gray-50 text-gray-600 border-gray-200");
+
+const statusDot = (status) => ({
+    "Pending Review": "bg-amber-500",
+    "Processing": "bg-blue-500",
+    "Documents Required": "bg-orange-500",
+    "Payment Requested": "bg-purple-500",
+    "Paid": "bg-emerald-500",
+    "Completed": "bg-teal-500",
+    "Rejected": "bg-red-500",
+}[status] || "bg-gray-400");
+
+// ─── PILL-STYLE STATUS DROPDOWN (matches the Visa Applications section) ─────
+const UmrahStatusDropdown = ({ currentStatus, onChange, loading }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = React.useRef(null);
+    const current = currentStatus || "Pending Review";
+
+    React.useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                type="button"
+                onClick={() => !loading && setIsOpen(!isOpen)}
+                disabled={loading}
+                className={`appearance-none bg-gradient-to-r from-white to-gray-50 border-2 ${statusColor(current).split(' ').find(c => c.startsWith('border-'))} rounded-xl px-3 py-2 text-[12px] font-bold outline-none cursor-pointer transition-all duration-200 flex items-center gap-2 min-w-[150px] justify-between shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${statusColor(current).split(' ').filter(c => c.startsWith('text-')).join(' ')}`}
+            >
+                <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${statusDot(current)}`} />
+                    <span>{current}</span>
+                </div>
+                {loading ? (
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-current border-t-transparent" />
+                ) : (
+                    <svg className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+                )}
+            </button>
+
+            <AnimatePresence>
+                {isOpen && !loading && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -12, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-full left-0 mt-2 w-56 bg-white border-2 border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden"
+                    >
+                        <div className="p-1.5 space-y-0.5 max-h-72 overflow-y-auto">
+                            {STATUSES.map(status => {
+                                const isActive = current === status;
+                                return (
+                                    <button
+                                        key={status}
+                                        type="button"
+                                        onClick={() => { onChange(status); setIsOpen(false); }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-[12px] font-bold transition-colors duration-150 ${
+                                            isActive
+                                                ? `${statusColor(status)} border-2 shadow-md`
+                                                : `text-gray-700 hover:bg-gray-100 hover:text-gray-900`
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2.5 h-2.5 rounded-full ${statusDot(status)}`} />
+                                            {status}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
 
 const docStatusColor = (status) => ({
     "Requested": "bg-orange-50 text-orange-700 border-orange-200",
@@ -49,6 +130,41 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
     const [rejectDocId, setRejectDocId] = useState(null); // doc awaiting a rejection reason
     const [rejectReason, setRejectReason] = useState('');
     const [saving, setSaving] = useState(false);
+    // Staged changes — Firestore is updated immediately on every action, but
+    // NO email is sent until admin clicks "Notify". Every action in between
+    // (status change, doc request/verify/reject/remove, payment request)
+    // gets appended here and rolled into ONE consolidated email — same
+    // pattern as the Visa side's onStage/pendingChanges.
+    const [pending, setPending] = useState({}); // { [id]: { statusChange, documentActions: [], paymentChange } }
+
+    const stageStatusChange = (id, oldStatus, newStatus) => {
+        setPending(prev => ({
+            ...prev,
+            [id]: {
+                ...prev[id],
+                // keep the ORIGINAL oldStatus if a change is already staged,
+                // so the eventual email reflects the full jump, not just the last click
+                statusChange: { oldStatus: prev[id]?.statusChange?.oldStatus || oldStatus, newStatus },
+            },
+        }));
+    };
+
+    const stageDocumentAction = (id, entry) => {
+        setPending(prev => ({
+            ...prev,
+            [id]: {
+                ...prev[id],
+                documentActions: [...(prev[id]?.documentActions || []), entry],
+            },
+        }));
+    };
+
+    const stagePaymentChange = (id, amount, note) => {
+        setPending(prev => ({
+            ...prev,
+            [id]: { ...prev[id], paymentChange: { amount, note } },
+        }));
+    };
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -88,18 +204,37 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
                     { status: newStatus, timestamp: new Date().toISOString(), updatedBy: `${actorRole}:${actorName}` }
                 ]
             });
-            sendUmrahStatusEmail({
-                to: target?.userEmail || target?.user?.email,
-                applicantName: target?.user?.name,
-                hotel: target?.makkah?.hotel,
-                checkIn: target?.makkah?.checkIn,
-                checkOut: target?.makkah?.checkOut,
-                oldStatus,
-                newStatus,
-            });
+            stageStatusChange(id, oldStatus, newStatus);
         } catch (err) {
             console.error('Failed to update umrah status', err);
             alert('Failed to update status. Please try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Sends exactly ONE consolidated email reflecting every staged change
+    // (status + doc actions + payment) for this request, then clears staging.
+    const notifyClient = async (target) => {
+        const p = pending[target.id];
+        if (!p) return;
+        setSaving(true);
+        try {
+            await sendUmrahConsolidatedEmail({
+                to: target.userEmail || target.user?.email,
+                applicantName: target.user?.name,
+                requestNumber: target.requestNumber,
+                hotel: target.makkah?.hotel,
+                checkIn: target.makkah?.checkIn,
+                checkOut: target.makkah?.checkOut,
+                statusChange: p.statusChange || null,
+                documentActions: p.documentActions || [],
+                paymentChange: p.paymentChange || null,
+            });
+            setPending(prev => { const n = { ...prev }; delete n[target.id]; return n; });
+        } catch (err) {
+            console.error('Failed to notify client', err);
+            alert('Failed to send notification email.');
         } finally {
             setSaving(false);
         }
@@ -126,15 +261,7 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
                     { status: 'Payment Requested', timestamp: new Date().toISOString(), updatedBy: `${actorRole}:${actorName}`, amount }
                 ]
             });
-            sendUmrahStatusEmail({
-                to: paymentModal.userEmail || paymentModal.user?.email,
-                applicantName: paymentModal.user?.name,
-                hotel: paymentModal.makkah?.hotel,
-                checkIn: paymentModal.makkah?.checkIn,
-                checkOut: paymentModal.makkah?.checkOut,
-                oldStatus: paymentModal.status,
-                newStatus: `Payment Requested — PKR ${amount.toLocaleString()} due`,
-            });
+            stagePaymentChange(paymentModal.id, amount, noteInput || '');
             setPaymentModal(null);
             setAmountInput('');
             setNoteInput('');
@@ -173,15 +300,7 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
                 patch.status = 'Documents Required';
             }
             await updateDoc(doc(db, 'umrahApplications', docsModalLive.id), patch);
-            sendUmrahStatusEmail({
-                to: docsModalLive.userEmail || docsModalLive.user?.email,
-                applicantName: docsModalLive.user?.name,
-                hotel: docsModalLive.makkah?.hotel,
-                checkIn: docsModalLive.makkah?.checkIn,
-                checkOut: docsModalLive.makkah?.checkOut,
-                oldStatus: docsModalLive.status,
-                newStatus: `Document Requested — please upload "${name}"`,
-            });
+            stageDocumentAction(docsModalLive.id, { docLabel: name, action: 'requested' });
             setNewDocName('');
         } catch (err) {
             console.error('Failed to add document request', err);
@@ -196,11 +315,13 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
         if (!confirm('Remove this document request?')) return;
         setSaving(true);
         try {
+            const removed = (docsModalLive.documentRequests || []).find(d => d.id === docId);
             const updatedDocs = (docsModalLive.documentRequests || []).filter(d => d.id !== docId);
             await updateDoc(doc(db, 'umrahApplications', docsModalLive.id), {
                 documentRequests: updatedDocs,
                 updatedAt: new Date().toISOString(),
             });
+            if (removed) stageDocumentAction(docsModalLive.id, { docLabel: removed.name, action: 'removed' });
         } catch (err) {
             console.error('Failed to remove document request', err);
             alert('Failed to remove document request.');
@@ -225,16 +346,10 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
                 updatedAt: new Date().toISOString(),
             });
             const target = updatedDocs.find(d => d.id === docId);
-            sendUmrahStatusEmail({
-                to: docsModalLive.userEmail || docsModalLive.user?.email,
-                applicantName: docsModalLive.user?.name,
-                hotel: docsModalLive.makkah?.hotel,
-                checkIn: docsModalLive.makkah?.checkIn,
-                checkOut: docsModalLive.makkah?.checkOut,
-                oldStatus: docsModalLive.status,
-                newStatus: newDocStatus === 'Verified'
-                    ? `Document "${target?.name}" verified ✓`
-                    : `Document "${target?.name}" rejected — please re-upload${reason ? `: ${reason}` : ''}`,
+            stageDocumentAction(docsModalLive.id, {
+                docLabel: target?.name,
+                action: newDocStatus === 'Verified' ? 'verified' : 'rejected',
+                message: newDocStatus === 'Rejected' ? reason : undefined,
             });
             setRejectDocId(null);
             setRejectReason('');
@@ -288,14 +403,14 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
             </div>
 
             {/* List */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
                 {filtered.length === 0 ? (
                     <div className="p-10 text-center text-gray-400">
                         <FaKaaba className="text-4xl mx-auto mb-3 opacity-30" />
                         <p className="font-bold">No Umrah requests found</p>
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-gray-100 [&>*:first-child]:rounded-t-2xl [&>*:last-child]:rounded-b-2xl">
                         {filtered.map(r => (
                             <div key={r.id} className="p-5 flex flex-col md:flex-row md:items-center gap-4 hover:bg-gray-50/60 transition">
                                 <div className="flex-1 min-w-0">
@@ -331,21 +446,31 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
                                         View Details
                                     </button>
 
-                                    <select
-                                        value={r.status || 'Pending Review'}
-                                        disabled={saving}
-                                        onChange={(e) => updateStatus(r.id, e.target.value)}
-                                        className="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 outline-none focus:ring-2 focus:ring-blue-400"
-                                    >
-                                        {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
+                                    <UmrahStatusDropdown
+                                        currentStatus={r.status}
+                                        loading={saving}
+                                        onChange={(newStatus) => updateStatus(r.id, newStatus)}
+                                    />
 
-                                    <button
-                                        onClick={() => setDocsModal(r)}
-                                        className="px-3 py-2 rounded-xl text-xs font-black bg-orange-500 text-white hover:bg-orange-600 transition flex items-center gap-1.5"
-                                    >
-                                        <FaFileUpload /> Documents{r.documentRequests?.length ? ` (${r.documentRequests.length})` : ''}
-                                    </button>
+                                    {pending[r.id] && (
+                                        <button
+                                            onClick={() => notifyClient(r)}
+                                            disabled={saving}
+                                            title="Send one email with all staged changes"
+                                            className="px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-1.5 animate-pulse"
+                                        >
+                                            <FaEnvelope /> Notify
+                                        </button>
+                                    )}
+
+                                    {(r.status === 'Documents Required' || r.documentRequests?.length > 0) && (
+                                        <button
+                                            onClick={() => setDocsModal(r)}
+                                            className="px-3 py-2 rounded-xl text-xs font-black bg-orange-500 text-white hover:bg-orange-600 transition flex items-center gap-1.5"
+                                        >
+                                            <FaFileUpload /> Documents{r.documentRequests?.length ? ` (${r.documentRequests.length})` : ''}
+                                        </button>
+                                    )}
 
                                     <button
                                         onClick={() => { setPaymentModal(r); setAmountInput(r.paymentAmount || ''); setNoteInput(r.paymentNote || ''); }}

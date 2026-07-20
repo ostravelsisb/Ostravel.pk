@@ -26,6 +26,7 @@ import {
 // External Components
 import DocumentViewer from "../Components/DocumentViewer";
 import UmrahProcessList from "../Components/UmrahProcessList";
+import VisaDocumentRequests from "../Components/VisaDocumentRequests";
 import VisaAnalytics from "../Components/VisaAnalytics";
 import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
@@ -105,13 +106,13 @@ const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
     const options = ["Doc Received", "Analyzing", "Req Document", "Visa in Process", "Interview", "Approve", "Reject"];
 
     const statusColors = {
-        "Doc Received": { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200", dot: "bg-sky-500" },
-        "Analyzing": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
-        "Req Document": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-500" },
-        "Visa in Process": { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", dot: "bg-indigo-500" },
-        "Interview": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
-        "Approve": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
-        "Reject": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
+        "Doc Received": { bg: "bg-sky-50", hoverBg: "hover:bg-sky-50", text: "text-sky-700", border: "border-sky-200", dot: "bg-sky-500" },
+        "Analyzing": { bg: "bg-amber-50", hoverBg: "hover:bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
+        "Req Document": { bg: "bg-orange-50", hoverBg: "hover:bg-orange-50", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-500" },
+        "Visa in Process": { bg: "bg-indigo-50", hoverBg: "hover:bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", dot: "bg-indigo-500" },
+        "Interview": { bg: "bg-purple-50", hoverBg: "hover:bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
+        "Approve": { bg: "bg-emerald-50", hoverBg: "hover:bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
+        "Reject": { bg: "bg-red-50", hoverBg: "hover:bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
     };
 
     const currentColor = statusColors[currentStatus] || statusColors["Doc Received"];
@@ -161,24 +162,23 @@ const ModernStatusDropdown = ({ currentStatus, onChange, loading }) => {
                                 const colors = statusColors[status];
                                 const isActive = currentStatus === status;
                                 return (
-                                    <motion.button
+                                    <button
                                         key={status}
-                                        whileHover={{ backgroundColor: isActive ? undefined : colors.bg }}
                                         onClick={() => {
                                             onChange({ target: { value: status } });
                                             setIsOpen(false);
                                         }}
-                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-[13px] font-bold transition-colors duration-150 ${
                                             isActive
                                                 ? `${colors.bg} ${colors.text} border-2 ${colors.border} shadow-md`
-                                                : `text-gray-700 hover:${colors.bg}`
+                                                : `text-gray-700 hover:bg-gray-100 hover:text-gray-900`
                                         }`}
                                     >
                                         <div className="flex items-center gap-2">
                                             <div className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
                                             {status}
                                         </div>
-                                    </motion.button>
+                                    </button>
                                 );
                             })}
                         </div>
@@ -775,49 +775,12 @@ function MessagesTab({ messages, adminName }) {
 
 // ─── SUB-ADMINS TAB ───────────────────────────────────────────────────────────
 function SubAdminsTab() {
-    // Uses the external SubAdminManagement component but wraps it in our design system
+    // SubAdminManagement now owns its own header (title + Secured Panel badge +
+    // Create button) and its own stat cards, so we don't wrap/duplicate them
+    // here anymore — that double-header/double-card look was the "odd UI" bug.
     return (
-        <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-5">
-
-            {/* Header Card */}
-            <motion.div variants={fadeUp} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-md shadow-orange-200">
-                            <FaUsersCog className="text-white text-xl" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-800">Sub-Admin Management</h2>
-                            <p className="text-sm text-gray-400 font-medium mt-0.5">Manage team access and permissions</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
-                            <MdVerifiedUser className="text-base" /> Secured Panel
-                        </div>
-                    </div>
-                </div>
-
-                {/* Permission legend */}
-                <div className="mt-5 pt-5 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                        { label: "View Only", icon: <MdVisibility />, color: "text-blue-400 bg-blue-50" },
-                        { label: "Edit Access", icon: <MdEdit />, color: "text-amber-400 bg-amber-50" },
-                        { label: "Full Access", icon: <MdAdminPanelSettings />, color: "text-orange-400 bg-orange-50" },
-                        { label: "Super Admin", icon: <MdShield />, color: "text-purple-400 bg-purple-50" },
-                    ].map((p, i) => (
-                        <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-100">
-                            <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-base ${p.color}`}>{p.icon}</span>
-                            <span className="text-xs font-bold text-gray-600">{p.label}</span>
-                        </div>
-                    ))}
-                </div>
-            </motion.div>
-
-            {/* SubAdminManagement component wrapped in card */}
-            <motion.div variants={fadeUp} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <SubAdminManagement />
-            </motion.div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+            <SubAdminManagement />
         </motion.div>
     );
 }
@@ -2037,6 +2000,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                         applicant={v}
                                         onStage={onStage}
                                     />
+                                    <VisaDocumentRequests visa={v} />
                                 </div>
                             </div>
 

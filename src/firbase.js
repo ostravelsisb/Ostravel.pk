@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, deleteApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import {
   getAuth,
@@ -123,8 +123,19 @@ const ensureUserDocument = async (user, displayNameOverride) => {
  * @returns {Promise} User credential
  */
 const createSubAdmin = async (email, password, displayName, assignedCountries = [], createdByUid, umrahAccess = false) => {
+  // Firebase Auth auto-signs-in as any user created via createUserWithEmailAndPassword
+  // on the given auth instance. If we used the primary `auth` here, the admin
+  // creating this sub-admin would get kicked out of their own session and
+  // silently become signed in as the new sub-admin.
+  //
+  // Fix: spin up an isolated secondary Firebase app + its own auth instance
+  // just for this one creation call, then tear it down immediately. The
+  // primary `auth` (and the admin's session) is never touched.
+  const secondaryApp = initializeApp(firebaseConfig, `subadmin-create-${Date.now()}`);
+  const secondaryAuth = getAuth(secondaryApp);
+
   try {
-    const userCred = await createUserWithEmailAndPassword(auth, email, password);
+    const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
 
     // Update Display Name
     if (displayName) {
@@ -153,6 +164,11 @@ const createSubAdmin = async (email, password, displayName, assignedCountries = 
   } catch (error) {
     console.error("Error creating sub-admin:", error);
     throw error;
+  } finally {
+    // Clean up the secondary auth session/app either way, so it never
+    // lingers or interferes with the primary app's session.
+    try { await secondaryAuth.signOut(); } catch (_) {}
+    try { await deleteApp(secondaryApp); } catch (_) {}
   }
 };
 

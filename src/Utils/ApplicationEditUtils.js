@@ -200,6 +200,36 @@ export const hasUnseenMessage = (application) => {
 };
 
 /**
+ * Mark the "Msg from Admin" ROW BADGE as seen. This is tracked separately
+ * from `messageSeenAt` (the in-view alert dismissal) so clicking the badge
+ * only hides the badge — the full message still shows inside the View
+ * modal until the user explicitly clicks "Dismiss" there.
+ * @param {string} docId
+ * @param {string} collectionName
+ * @param {*} adminMessageAt - the adminMessageAt value currently on the doc
+ */
+export const markBadgeSeen = async (docId, collectionName, adminMessageAt) => {
+    try {
+        const docRef = doc(db, collectionName, docId);
+        await updateDoc(docRef, {
+            badgeSeenAt: adminMessageAt ?? null
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('Error marking badge seen:', error);
+        throw error;
+    }
+};
+
+/**
+ * True when there is an admin message the row badge hasn't been dismissed for yet.
+ */
+export const hasUnseenBadge = (application) => {
+    if (!application?.adminMessage) return false;
+    return toMillis(application.adminMessageAt) !== toMillis(application.badgeSeenAt);
+};
+
+/**
  * Dismiss the "Re-uploaded — Review" highlight on an application. Called
  * when admin/subadmin clicks the card badge directly (without opening the
  * full Document Viewer). Clears all pending resubmission flags so the

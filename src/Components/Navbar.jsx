@@ -95,7 +95,7 @@ const SimpleNavLink = ({ item }) => (
   <NavLink
     to={item.to}
     className={({ isActive }) =>
-      `relative group py-2 text-sm xl:text-base font-medium transition-colors ${isActive ? "text-blue-600" : "text-gray-700 hover:text-blue-600"}`
+      `relative group py-2 whitespace-nowrap text-xs xl:text-base font-medium transition-colors ${isActive ? "text-blue-600" : "text-gray-700 hover:text-blue-600"}`
     }
   >
     <span className="relative z-10">{item.name}</span>
@@ -116,7 +116,7 @@ const VisaDropdown = () => {
 
   return (
     <div className="relative group">
-      <div className={`relative group py-2 cursor-pointer text-sm xl:text-base ${isActive ? "text-blue-600" : ""}`}>
+      <div className={`relative group py-2 cursor-pointer whitespace-nowrap text-xs xl:text-base ${isActive ? "text-blue-600" : ""}`}>
         <span>Visa</span>
         <span className={`absolute left-0 bottom-0 h-0.5 bg-blue-500 transition-all duration-300 group-hover:w-full ${isActive ? "w-full" : "w-0"}`}></span>
       </div>
@@ -162,7 +162,7 @@ const FileProcessDropdown = () => {
 
   return (
     <div className="relative group">
-      <div className={`relative group py-2 cursor-pointer text-sm xl:text-base ${isActive ? "text-blue-600" : ""}`}>
+      <div className={`relative group py-2 cursor-pointer whitespace-nowrap text-xs xl:text-base ${isActive ? "text-blue-600" : ""}`}>
         <span>File Process</span>
         <span className={`absolute left-0 bottom-0 h-0.5 bg-blue-500 transition-all duration-300 group-hover:w-full ${isActive ? "w-full" : "w-0"}`}></span>
       </div>
@@ -231,23 +231,23 @@ function Navbar() {
         {/* --- DESKTOP NAV (Visible on Large Screens only - lg+) --- */}
         {/* CHANGED: 'md:flex' -> 'lg:flex' to hide on small laptops/tablets */}
         <div className="hidden lg:flex justify-between w-full max-w-7xl items-center">
-          <div className="flex gap-8 xl:gap-12 items-center">
-            <Link to="/">
+          <div className="flex gap-3 xl:gap-12 items-center flex-shrink-0">
+            <Link to="/" className="flex-shrink-0">
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-3"
+                className="flex items-center gap-2 xl:gap-3"
               >
-                <img src={logo} alt="OS Logo" className="w-[84px] h-[84px] object-contain" />
-                <div className="w-px h-8 bg-gray-300" />
-                <span className="text-lg font-extrabold tracking-tight">
+                <img src={logo} alt="OS Logo" className="w-[56px] h-[56px] xl:w-[84px] xl:h-[84px] object-contain flex-shrink-0" />
+                <div className="w-px h-8 bg-gray-300 flex-shrink-0" />
+                <span className="text-sm xl:text-lg font-extrabold tracking-tight whitespace-nowrap">
                   <span className="text-blue-600">O.S</span>
                   <span className="text-blue-600"> Travel & Tours</span>
                 </span>
               </motion.div>
             </Link>
             {/* Nav Items */}
-            <div className="flex gap-6 xl:gap-8 items-center cursor-pointer">
+            <div className="flex gap-3 xl:gap-8 items-center cursor-pointer flex-nowrap">
               {navItems.map((item) => {
                 if (item.dropdownType === "visa") return <VisaDropdown key={item.name} />;
                 if (item.dropdownType === "fileProcess") return <FileProcessDropdown key={item.name} />;
@@ -257,13 +257,13 @@ function Navbar() {
           </div>
 
           {/* Right Side: Auth & Currency */}
-          <div className="flex gap-4 xl:gap-6 items-center">
+          <div className="flex gap-2 xl:gap-6 items-center flex-shrink-0">
             {/* Currency Selector */}
-            <div className="relative group">
+            <div className="relative group flex-shrink-0">
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="cursor-pointer bg-transparent border border-gray-300 text-gray-700 py-1.5 px-3 rounded-full hover:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm font-bold transition-all"
+                className="cursor-pointer bg-transparent border border-gray-300 text-gray-700 py-1.5 px-2 xl:px-3 rounded-full hover:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs xl:text-sm font-bold transition-all"
               >
                 {currencies.map(curr => (
                   <option key={curr} value={curr}>{curr}</option>
@@ -274,20 +274,21 @@ function Navbar() {
             {/* --- AUTH CONDITIONAL RENDERING --- */}
             {currentUser ? (
               // Logged In State
-              <div className="flex items-center gap-4 pl-4 border-l border-gray-300/50">
-                <div className="flex flex-col items-end">
-                  <span className="text-sm font-bold text-gray-800 flex items-center gap-2">
+              <div className="flex items-center gap-2 xl:gap-4 pl-2 xl:pl-4 border-l border-gray-300/50 flex-shrink-0">
+                <div className="hidden xl:flex flex-col items-end max-w-[140px]">
+                  <span className="text-sm font-bold text-gray-800 flex items-center gap-2 whitespace-nowrap">
                     {/* Fallback to email if name isn't set yet */}
                     {currentUser.displayName || "User"}
                     <FaUserCircle className="text-xl text-blue-600" />
                   </span>
-                  <span className="text-[10px] text-gray-500 font-normal">{currentUser.email}</span>
+                  <span className="text-[10px] text-gray-500 font-normal truncate max-w-full">{currentUser.email}</span>
                 </div>
+                <FaUserCircle className="text-2xl text-blue-600 xl:hidden flex-shrink-0" />
                 <Link
                   to="/dashboard"
-                  className="px-4 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs font-black hover:bg-blue-100 transition-colors uppercase tracking-wide shadow-sm"
+                  className="px-3 xl:px-4 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs font-black hover:bg-blue-100 transition-colors uppercase tracking-wide shadow-sm whitespace-nowrap"
                 >
-                  My Policies
+                  My Bookings
                 </Link>
                 <motion.button
                   whileHover={{ scale: 1.1, color: "#ef4444" }}
@@ -434,7 +435,7 @@ function Navbar() {
                       onClick={() => setIsMobileMenuOpen(false)}
                       className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition-transform"
                     >
-                      My Policies
+                      My Bookings
                     </Link>
 
                     <button

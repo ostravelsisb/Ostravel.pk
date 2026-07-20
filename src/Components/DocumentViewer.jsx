@@ -22,6 +22,34 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
     
     // Refresh trigger for document list
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [downloading, setDownloading] = useState(null);
+
+    // Force a direct file download instead of opening the file in a new tab.
+    // Firebase Storage URLs are cross-origin, so a plain <a download> is ignored
+    // by the browser — we fetch the file as a blob and download that instead.
+    const handleDownload = async (url, filename) => {
+        if (!url) return;
+        setDownloading(filename || url);
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = filename || "document";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+            console.error("Download failed:", e);
+            notify.error("Download failed. Please try again.");
+            // Fallback: open in a new tab if the fetch/blob approach fails (e.g. CORS)
+            window.open(url, "_blank", "noopener,noreferrer");
+        } finally {
+            setDownloading(null);
+        }
+    };
     // Per-doc edit access is now fully automated: requesting a re-upload grants
     // access to that specific doc, nothing else. This just mirrors live state
     // for the "Edit Access Given" badge — there is no manual toggle anymore.
@@ -533,14 +561,14 @@ const DocumentViewer = ({ visa, onClose, onVerifyDocument, onStage }) => {
                                                 <span className="text-sm font-bold text-emerald-700">Verified</span>
                                             </div>
                                         )}
-                                        <a
-                                            href={activeURLs[selectedDoc.key]}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:from-amber-400 hover:to-orange-400 transition-all duration-200"
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDownload(activeURLs[selectedDoc.key], `${selectedDoc.label || "document"}`)}
+                                            disabled={downloading === selectedDoc.label}
+                                            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:from-amber-400 hover:to-orange-400 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                                         >
-                                            <MdDownload className="text-lg" /> Download
-                                        </a>
+                                            <MdDownload className="text-lg" /> {downloading === selectedDoc.label ? "Downloading..." : "Download"}
+                                        </button>
                                     </div>
                                 </div>
 

@@ -1290,7 +1290,7 @@ export default function AdminDashboard() {
                                 {showNotifDropdown && (
                                     <motion.div initial={{ opacity: 0, y: -8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: -8, scale: 0.97 }} transition={{ duration: 0.15 }}
-                                        className="absolute right-0 top-11 w-80 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden">
+                                        className="absolute right-0 top-11 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden">
                                         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                                             <h4 className="text-base font-bold text-gray-800">Notifications</h4>
                                             <span className="text-[12px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">{visas.filter(v => v.userConfirmed).length} New</span>
@@ -1334,7 +1334,7 @@ export default function AdminDashboard() {
                                 {showProfileDropdown && (
                                     <motion.div initial={{ opacity: 0, y: -8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: -8, scale: 0.97 }} transition={{ duration: 0.15 }}
-                                        className="absolute right-0 top-11 w-64 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden">
+                                        className="absolute right-0 top-11 w-[calc(100vw-2rem)] max-w-64 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden">
                                         <div className="p-4 border-b border-gray-100 bg-gradient-to-br from-orange-50 to-amber-50 flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-base shrink-0">
                                                 {(currentUser?.email || "A")[0].toUpperCase()}

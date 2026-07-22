@@ -30,12 +30,10 @@ export default function VisaDocumentRequests({ visa }) {
 
     const requests = useMemo(() => visa.documentRequests || [], [visa.documentRequests]);
 
-    // Only show this action once the applicant has actually been asked for
-    // a document ("Req Document" status), or if there are already requests
-    // on file that still need review — otherwise it clutters every row
-    // regardless of status.
-    const shouldShow = visa.status === 'Req Document' || requests.length > 0;
-    if (!shouldShow) return null;
+    // Only show this action while the application is in the "Req Document"
+    // status — it disappears again once the status moves on, so it doesn't
+    // clutter every row regardless of status.
+    if (visa.status !== 'Req Document') return null;
 
     const addDocumentRequest = async () => {
         const name = newDocName.trim();

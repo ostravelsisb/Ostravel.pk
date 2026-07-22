@@ -27,6 +27,7 @@ import {
 import DocumentViewer from "../Components/DocumentViewer";
 import UmrahProcessList from "../Components/UmrahProcessList";
 import VisaDocumentRequests from "../Components/VisaDocumentRequests";
+import VisaInterviewDocuments from "../Components/VisaInterviewDocuments";
 import VisaAnalytics from "../Components/VisaAnalytics";
 import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
@@ -2001,6 +2002,7 @@ function VisaProcessList({ visas, updateLocal, setSelectedDoc, initialSearch = "
                                         onStage={onStage}
                                     />
                                     <VisaDocumentRequests visa={v} />
+                                    <VisaInterviewDocuments visa={v} />
                                 </div>
                             </div>
 

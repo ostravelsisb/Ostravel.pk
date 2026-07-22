@@ -12,6 +12,7 @@ import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp, w
 import { db, signOut } from "../firbase";
 import UmrahProcessList from "../Components/UmrahProcessList";
 import VisaDocumentRequests from "../Components/VisaDocumentRequests";
+import VisaInterviewDocuments from "../Components/VisaInterviewDocuments";
 import { useAuth } from "../Context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -1774,6 +1775,7 @@ export default function SubAdminPanel() {
                                                         onStage={stagePendingChange}
                                                     />
                                                     <VisaDocumentRequests visa={v} />
+                                                    <VisaInterviewDocuments visa={v} />
                                                 </div>
                                             </div>
 

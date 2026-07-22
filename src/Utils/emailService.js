@@ -165,6 +165,41 @@ export const sendDocumentVerifiedEmail = async ({
     }
 };
 
+// ─── NEW: interview documents email ──────────────────────────────────────────
+// Fired only while a visa is in the "Interview" status. Sends one or more
+// admin-uploaded files straight to the applicant's inbox as attachments,
+// each labeled with the name the admin gave it.
+export const sendInterviewDocumentsEmail = async ({
+    to,
+    applicantName,
+    applicationNumber,
+    country,
+    visaType,
+    note,        // string | null — optional details from admin
+    documents,   // [{ name, url, fileName }] — required, at least 1
+}) => {
+    if (!to || !documents || documents.length === 0) return { skipped: true };
+    try {
+        const res = await fetch(`${EMAIL_API_BASE}/interview-documents`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                to,
+                applicantName,
+                applicationNumber,
+                country,
+                visaType,
+                note: note || null,
+                documents,
+            }),
+        });
+        return { ok: res.ok };
+    } catch (err) {
+        console.error("Failed to send interview-documents email:", err);
+        return { ok: false, error: err };
+    }
+};
+
 // ─── NEW: single consolidated email ──────────────────────────────────────────
 // Bundles status change + edit-access + admin message + all document actions
 // (verify / reupload-request / delete) into ONE email. Fired only from the

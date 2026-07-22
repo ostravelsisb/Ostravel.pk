@@ -40,9 +40,18 @@ const PassengerCounter = ({ title, description, count, onDecrement, onIncrement,
 );
 
 
+// WhatsApp business number (same one used by the floating chat widget)
+const WHATSAPP_NUMBER = "923335542877";
+
 function Flights() {
   const [flightType, setFlightType] = useState("Round-trip"); // 'Round-trip' or 'One-way'
-  
+
+  // Route + date fields (now controlled so they can be used in the WhatsApp message)
+  const [fromCity, setFromCity] = useState("");
+  const [toCity, setToCity] = useState("");
+  const [departureDate, setDepartureDate] = useState("");
+  const [returnDate, setReturnDate] = useState("");
+
   // State for passenger dropdown
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0); // Ages 2-11
@@ -75,6 +84,50 @@ function Flights() {
   const getPassengerDisplayText = () => {
     const total = adults + children + infants;
     return `${total} Passenger${total > 1 ? "s" : ""}, ${cabinClass}`;
+  };
+
+  const formatDate = (d) => {
+    if (!d) return "Flexible";
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  // Builds a prewritten, nicely formatted WhatsApp message from the current
+  // form values and opens a wa.me chat with it pre-filled.
+  const handleSearchFlights = () => {
+    if (!fromCity.trim() || !toCity.trim()) {
+      alert("Please enter both a departure and destination city/airport.");
+      return;
+    }
+    if (!departureDate) {
+      alert("Please select a departure date.");
+      return;
+    }
+
+    const lines = [
+      "✈️ *Flight Booking Inquiry*",
+      "",
+      `*Trip Type:* ${flightType}`,
+      `*From:* ${fromCity.trim()}`,
+      `*To:* ${toCity.trim()}`,
+      `*Departure Date:* ${formatDate(departureDate)}`,
+    ];
+
+    if (flightType === "Round-trip") {
+      lines.push(`*Return Date:* ${formatDate(returnDate)}`);
+    }
+
+    lines.push(
+      `*Passengers:* ${adults} Adult${adults > 1 ? "s" : ""}${children ? `, ${children} Child${children > 1 ? "ren" : ""}` : ""}${infants ? `, ${infants} Infant${infants > 1 ? "s" : ""}` : ""}`,
+      `*Cabin Class:* ${cabinClass}`,
+      "",
+      "Hi, I'd like to get a quote for the flight details above. Please share available options and pricing. Thank you!"
+    );
+
+    const message = lines.join("\n");
+    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -119,6 +172,8 @@ function Flights() {
               type="text"
               id="from"
               placeholder="City or Airport (e.g., LHE)"
+              value={fromCity}
+              onChange={(e) => setFromCity(e.target.value)}
               className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -135,6 +190,8 @@ function Flights() {
               type="text"
               id="to"
               placeholder="City or Airport (e.g., DXB)"
+              value={toCity}
+              onChange={(e) => setToCity(e.target.value)}
               className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -150,6 +207,8 @@ function Flights() {
             <input
               type="date"
               id="departureDate"
+              value={departureDate}
+              onChange={(e) => setDepartureDate(e.target.value)}
               className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-500"
             />
           </div>
@@ -165,6 +224,8 @@ function Flights() {
             <input
               type="date"
               id="returnDate"
+              value={returnDate}
+              onChange={(e) => setReturnDate(e.target.value)}
               disabled={flightType === "One-way"} // Disable if one-way
               className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
@@ -256,8 +317,12 @@ function Flights() {
 
       {/* 3. Submit Button */}
       <div className="mt-8">
-        <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg rounded-lg px-16 py-3 transition-colors">
-          Search Flights
+        <button
+          type="button"
+          onClick={handleSearchFlights}
+          className="w-full bg-green-500 hover:bg-green-600 text-white font-bold text-lg rounded-lg px-16 py-3 transition-colors flex items-center justify-center gap-2"
+        >
+          Send Inquiry on WhatsApp
         </button>
       </div>
     </div>

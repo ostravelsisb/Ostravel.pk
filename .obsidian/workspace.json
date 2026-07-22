@@ -11,10 +11,14 @@
             "id": "2d805c49af368507",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "node_modules/xlsx/README.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "README"
             }
           }
         ]
@@ -108,11 +112,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "node_modules/xlsx/README.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from README"
             }
           },
           {
@@ -178,6 +183,7 @@
   },
   "active": "2d805c49af368507",
   "lastOpenFiles": [
+    "src/Components/VisaInterviewDocuments.jsx",
     "src/Components/VisaDocumentRequests.jsx",
     "node_modules/@rollup/rollup-linux-arm64-musl",
     "node_modules/@rollup/rollup-linux-arm64-gnu",
@@ -188,7 +194,6 @@
     "node_modules/@rollup/rollup-darwin-x64",
     "node_modules/@esbuild/win32-arm64",
     "node_modules/@rollup/rollup-darwin-arm64",
-    "node_modules/@esbuild/sunos-x64",
     "node_modules/dotenv/skills/dotenvx/SKILL.md",
     "node_modules/dotenv/skills/dotenv/SKILL.md",
     "node_modules/basic-auth/node_modules/safe-buffer/README.md",

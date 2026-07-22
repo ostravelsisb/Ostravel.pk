@@ -274,16 +274,27 @@ export default function RevenueDetails() {
         // Drop dev-only bypass test records (order IDs starting VISA-TEST-) —
         // these were never real payments, see PaymentReturn.jsx verifyPayment().
         const isRealPayment = (t) => !String(t?.orderId || "").startsWith("VISA-TEST-");
-        const all = [...policies, ...umrahPayments, ...visaPayments].filter(isRealPayment);
-        if (!isSubAdmin) return all;
+        const realPolicies = policies.filter(isRealPayment);
+        const realUmrah = umrahPayments.filter(isRealPayment);
+        const realVisas = visaPayments.filter(isRealPayment);
+        if (!isSubAdmin) return [...realPolicies, ...realUmrah, ...realVisas];
         if (assignedCountries.length === 0) return [];
-        // Sub-admins only see transactions for their assigned countries.
+        // Sub-admins only see Insurance/Visa transactions for their assigned
+        // countries — those records carry a country field. Umrah packages are
+        // NOT country-scoped (no country field on umrahApplications docs), so
+        // filtering them by country always produced zero results; instead gate
+        // Umrah visibility by the same umrahAccess flag used everywhere else.
         const lower = assignedCountries.map(c => c.toLowerCase());
-        return all.filter(t => {
+        const byCountry = (t) => {
             const c = getCountry(t);
             return c && lower.includes(String(c).toLowerCase());
-        });
-    }, [policies, umrahPayments, visaPayments, isSubAdmin, assignedCountries]);
+        };
+        return [
+            ...realPolicies.filter(byCountry),
+            ...(userData?.umrahAccess ? realUmrah : []),
+            ...realVisas.filter(byCountry),
+        ];
+    }, [policies, umrahPayments, visaPayments, isSubAdmin, assignedCountries, userData?.umrahAccess]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();

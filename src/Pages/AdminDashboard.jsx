@@ -831,7 +831,6 @@ export default function AdminDashboard() {
     const [overallPeriod, setOverallPeriod] = useState("Last 6 Months");
     const [showSalesDropdown, setShowSalesDropdown] = useState(false);
     const [showOverallDropdown, setShowOverallDropdown] = useState(false);
-    const [allowedEditPage, setAllowedEditPage] = useState(1);
     const [recentEditPage, setRecentEditPage] = useState(1);
     const { currentUser } = useAuth();
     const navigate = useNavigate();
@@ -1020,13 +1019,24 @@ export default function AdminDashboard() {
         const visaRevenue = visas
             .filter(isRealPayment)
             .reduce((a, b) => a + (Number(b?.amountPaid) || 0), 0);
+        // Umrah requests only carry a real payment once PaymentReturn.jsx marks them
+        // Paid (see processUmrahPayment) — count amountPaid on those, same test-order
+        // exclusion as the other two sources.
+        const umrahRevenue = umrahRequests
+            .filter(isRealPayment)
+            .filter(u => u.paymentStatus === "Paid" || u.status === "Paid")
+            .reduce((a, b) => a + (Number(b?.amountPaid) || 0), 0);
+        const totalInsuranceRevenue = insuranceRevenue + gatewayRevenue;
         return {
-            revenue: insuranceRevenue + gatewayRevenue + visaRevenue,
+            revenue: totalInsuranceRevenue + visaRevenue + umrahRevenue,
+            insuranceRevenue: totalInsuranceRevenue,
+            umrahRevenue,
+            visaRevenue,
             pending: visas.filter(v => v.status === "Doc Received").length,
             approved: visas.filter(v => v.status === "Approve").length,
             rejected: visas.filter(v => v.status === "Reject").length,
         };
-    }, [visas, policies, gatewayPolicies]);
+    }, [visas, policies, gatewayPolicies, umrahRequests]);
 
     const parseDate = (d) => {
         if (!d) return null;
@@ -1130,6 +1140,7 @@ export default function AdminDashboard() {
             total, approved, pending, rejected,
             approvedPct: total ? Math.round((approved / total) * 100) : 0,
             pendingPct: total ? Math.round((pending / total) * 100) : 0,
+            rejectedPct: total ? Math.round((rejected / total) * 100) : 0,
             chart: [
                 { name: "Approve", value: approved || 0.0001, color: "#22C55E" },
                 { name: "Pending", value: pending || 0.0001, color: "#F97316" },
@@ -1377,7 +1388,7 @@ export default function AdminDashboard() {
                                         <p className="text-base font-bold text-gray-600">Total Revenue</p>
                                     </div>
                                     <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {stats.revenue.toLocaleString()}</h3>
-                                    <p className="text-[13px] font-bold text-orange-600">+5% since last month</p>
+                                    <p className="text-[13px] font-bold text-orange-600">PKR {stats.revenue.toLocaleString()} collected</p>
                                 </motion.div>
 
                                 <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
@@ -1389,7 +1400,7 @@ export default function AdminDashboard() {
                                         <p className="text-base font-bold text-gray-600">Visa Applications</p>
                                     </div>
                                     <h3 className="text-3xl font-bold text-gray-800 mb-1">{visas.length}</h3>
-                                    <p className="text-[13px] font-bold text-emerald-600">+22% since last month</p>
+                                    <p className="text-[13px] font-bold text-emerald-600">PKR {stats.visaRevenue.toLocaleString()} collected</p>
                                 </motion.div>
 
                                 <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
@@ -1398,22 +1409,22 @@ export default function AdminDashboard() {
                                     className="bg-[#E0F3FE] rounded-2xl p-5 border border-black/5 cursor-pointer">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="w-10 h-10 rounded-xl bg-[#00B4D8] flex items-center justify-center text-white text-xl shadow-sm shadow-sky-300"><FaKaaba /></div>
-                                        <p className="text-base font-bold text-gray-600">Umrah Queries</p>
+                                        <p className="text-base font-bold text-gray-600">Umrah Applications</p>
                                     </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{inquiries.length}</h3>
-                                    <p className="text-[13px] font-bold text-sky-600">+10% since last month</p>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{umrahRequests.length}</h3>
+                                    <p className="text-[13px] font-bold text-sky-600">PKR {stats.umrahRevenue.toLocaleString()} collected</p>
                                 </motion.div>
 
                                 <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                                     whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(255,179,0,0.25)" }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => setActiveTab("messages")} whileTap={{ scale: 0.97 }}
+                                    onClick={() => setActiveTab("insurance")} whileTap={{ scale: 0.97 }}
                                     className="bg-[#FFF8E1] rounded-2xl p-5 border border-black/5 cursor-pointer">
                                     <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#FFB300] flex items-center justify-center text-white text-xl shadow-sm shadow-amber-300"><MdMessage /></div>
-                                        <p className="text-base font-bold text-gray-600">Messages</p>
+                                        <div className="w-10 h-10 rounded-xl bg-[#FFB300] flex items-center justify-center text-white text-xl shadow-sm shadow-amber-300"><FaUserShield /></div>
+                                        <p className="text-base font-bold text-gray-600">Insurance Revenue</p>
                                     </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{messages.length}</h3>
-                                    <p className="text-[13px] font-bold text-amber-600">+35% since last month</p>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {stats.insuranceRevenue.toLocaleString()}</h3>
+                                    <p className="text-[13px] font-bold text-amber-600">PKR {stats.insuranceRevenue.toLocaleString()} collected</p>
                                 </motion.div>
                             </motion.div>
 
@@ -1509,7 +1520,7 @@ export default function AdminDashboard() {
                                         <div className="relative w-[140px] h-[140px] shrink-0">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <RadialBarChart cx="50%" cy="50%" innerRadius="55%" outerRadius="100%" barSize={10}
-                                                    data={[{ name: "Approve", value: donutData.approvedPct, fill: "#22C55E" }, { name: "Pending", value: donutData.pendingPct, fill: "#FFB020" }]}
+                                                    data={[{ name: "Approve", value: donutData.approvedPct, fill: "#22C55E" }, { name: "Reject", value: donutData.rejectedPct, fill: "#EF4444" }]}
                                                     startAngle={90} endAngle={-270}>
                                                     <RadialBar background={{ fill: "#EEF1F4" }} dataKey="value" cornerRadius={20} clockWise />
                                                 </RadialBarChart>
@@ -1522,9 +1533,9 @@ export default function AdminDashboard() {
                                                 <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">▲ {donutData.approvedPct}%</span>
                                             </div>
                                             <div>
-                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.pending}</p>
-                                                <p className="text-[13px] font-bold text-amber-500 mt-0.5">Pending</p>
-                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">▲ {donutData.pendingPct}%</span>
+                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.rejected}</p>
+                                                <p className="text-[13px] font-bold text-red-500 mt-0.5">Rejected</p>
+                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">▲ {donutData.rejectedPct}%</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1563,38 +1574,6 @@ export default function AdminDashboard() {
                                             </motion.button>
                                         ))}
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Allowed Edited */}
-                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                                <div className="flex items-center justify-between mb-5">
-                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><MdLockOpen className="text-emerald-600" />Allowed Edited Applications</h3>
-                                    {visas.filter(v => v.editApproved && !v.userConfirmed).length > 0 && (
-                                        <span className="bg-emerald-100 text-emerald-700 text-sm font-bold px-3 py-1 rounded-full">{visas.filter(v => v.editApproved && !v.userConfirmed).length} Pending</span>
-                                    )}
-                                </div>
-                                {visas.filter(v => v.editApproved && !v.userConfirmed).length === 0 ? (
-                                    <div className="text-center py-12"><MdLockOpen className="text-gray-200 text-5xl mx-auto mb-3" /><p className="text-gray-500 font-bold">No edit-allowed applications</p></div>
-                                ) : (
-                                    <>
-                                    <div className="space-y-3">
-                                        {visas.filter(v => v.editApproved && !v.userConfirmed).slice((allowedEditPage-1)*ITEMS_PER_PAGE, allowedEditPage*ITEMS_PER_PAGE).map(visa => (
-                                            <div key={visa.id} className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                                                <div className="flex items-center gap-4 flex-1">
-                                                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center"><FaPassport className="text-emerald-600" /></div>
-                                                    <div className="flex-1">
-                                                        <p className="font-bold text-gray-800">{visa.applicantName}</p>
-                                                        <p className="text-sm text-gray-500">{visa.country} • {visa.visaType}</p>
-                                                        {visa.adminMessage && <p className="text-sm text-emerald-700 mt-1 font-bold">📝 {visa.adminMessage}</p>}
-                                                    </div>
-                                                </div>
-                                                <span className="text-sm font-bold text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100">AWAITING EDIT</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <Pagination total={visas.filter(v => v.editApproved && !v.userConfirmed).length} page={allowedEditPage} onChange={setAllowedEditPage} />
-                                    </>
                                 )}
                             </div>
 

@@ -179,6 +179,8 @@
   },
   "active": "2d805c49af368507",
   "lastOpenFiles": [
+    "subadmin_damage.diff",
+    "SubAdminPanel_original.jsx",
     "src/Components/InsuranceProcessList.jsx",
     "node_modules/xlsx/README.md",
     "src/Components/VisaInterviewDocuments.jsx",
@@ -189,8 +191,6 @@
     "node_modules/@rollup/rollup-linux-arm-gnueabihf",
     "node_modules/@rollup/rollup-freebsd-x64",
     "node_modules/@rollup/rollup-freebsd-arm64",
-    "node_modules/@rollup/rollup-darwin-x64",
-    "node_modules/@esbuild/win32-arm64",
     "node_modules/dotenv/skills/dotenvx/SKILL.md",
     "node_modules/dotenv/skills/dotenv/SKILL.md",
     "node_modules/basic-auth/node_modules/safe-buffer/README.md",

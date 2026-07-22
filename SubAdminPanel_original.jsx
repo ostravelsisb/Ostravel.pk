@@ -416,9 +416,8 @@ export default function SubAdminPanel() {
 
     // Revenue KPI (country-scoped) — feeds the Total Revenue card + /subadmin/revenue page
     const [countryRevenue, setCountryRevenue] = useState(0);
-    const [insuranceRevenue, setInsuranceRevenue] = useState(0);
     useEffect(() => {
-        if (assignedCountries.length === 0) { setCountryRevenue(0); setInsuranceRevenue(0); return; }
+        if (assignedCountries.length === 0) { setCountryRevenue(0); return; }
         const lower = assignedCountries.map(c => c.toLowerCase());
         const getCountry = (r) => r?.country || r?.destinationCountry || r?.destination
             || r?.planDetails?.Country || r?.PlanDetails?.Country || r?.planDetails?.country || null;
@@ -430,10 +429,7 @@ export default function SubAdminPanel() {
             .filter(v => !String(v?.orderId || "").startsWith("VISA-TEST-"))
             .reduce((a, v) => a + (Number(v?.amountPaid) || 0), 0);
         let insuranceSum = 0, gatewaySum = 0;
-        const recalc = () => {
-            setInsuranceRevenue(insuranceSum + gatewaySum);
-            setCountryRevenue(insuranceSum + gatewaySum + visaRevenue);
-        };
+        const recalc = () => setCountryRevenue(insuranceSum + gatewaySum + visaRevenue);
         const sumMatching = (docs) => docs.reduce((a, r) => {
             // Exclude dev-only bypass test records (order IDs starting VISA-TEST-) —
             // these were never real payments, see PaymentReturn.jsx verifyPayment().
@@ -451,15 +447,6 @@ export default function SubAdminPanel() {
         }, (e) => console.error("policies onSnapshot error:", e));
         return () => { insuranceUnsub(); gatewayUnsub(); };
     }, [assignedCountries, visas]);
-
-    // Umrah revenue (only meaningful when this sub-admin has umrahAccess — umrahRequests
-    // stays empty otherwise). Mirrors AdminDashboard's stats.umrahRevenue logic.
-    const umrahRevenue = useMemo(() => {
-        return umrahRequests
-            .filter(u => !String(u?.orderId || "").startsWith("VISA-TEST-"))
-            .filter(u => u.paymentStatus === "Paid" || u.status === "Paid")
-            .reduce((a, u) => a + (Number(u?.amountPaid) || 0), 0);
-    }, [umrahRequests]);
 
     // Data Fetching - Only assigned countries
     useEffect(() => {
@@ -664,13 +651,14 @@ export default function SubAdminPanel() {
         else if (overallPeriod === "This Year") { cutoff = new Date(now.getFullYear(), 0, 1); }
         const filtered = cutoff ? visas.filter(v => { const d = parseDate(v.applicationDate); return d && d >= cutoff; }) : visas;
         const approved = filtered.filter(v => v.status === "Approve").length;
-        const rejected = filtered.filter(v => v.status === "Reject").length;
+        const docReceived = filtered.filter(v => v.status === "Doc Received").length;
+        const analyzing = filtered.filter(v => v.status === "Analyzing").length;
         const total = filtered.length || 0;
         return {
             approved,
-            rejected,
+            pending: docReceived + analyzing,
             approvedPct: total ? Math.round((approved / total) * 100) : 0,
-            rejectedPct: total ? Math.round((rejected / total) * 100) : 0,
+            pendingPct: total ? Math.round(((docReceived + analyzing) / total) * 100) : 0,
         };
     }, [visas, overallPeriod]);
 
@@ -1044,9 +1032,9 @@ export default function SubAdminPanel() {
                                 </span>
                             </div> */}
 
-                            {/* === TOP KPI ROW (matches AdminDashboard: Total Revenue / Visa Applications / Umrah Applications / Insurance Revenue) === */}
+                            {/* === TOP KPI ROW (6 pastel cards) === */}
                             <motion.div
-                                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5"
+                                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4"
                                 initial="hidden"
                                 animate="show"
                                 variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07 } } }}
@@ -1066,67 +1054,103 @@ export default function SubAdminPanel() {
                                         </div>
                                         <p className="text-base font-bold text-gray-600">Total Revenue</p>
                                     </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {(countryRevenue + umrahRevenue).toLocaleString()}</h3>
-                                    <p className="text-[13px] font-bold text-orange-600">PKR {(countryRevenue + umrahRevenue).toLocaleString()} collected</p>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {countryRevenue.toLocaleString()}</h3>
+                                    <p className="text-[13px] font-bold text-orange-600">for your assigned countries</p>
                                 </motion.div>
 
-                                {/* Visa Applications */}
+                                {/* Total */}
                                 <motion.div
                                     variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(40,199,111,0.25)" }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(99,102,241,0.25)" }}
                                     transition={{ duration: 0.35, ease: "easeOut" }}
                                     onClick={() => { setStatusFilter("All"); setActiveTab("visas"); }}
                                     whileTap={{ scale: 0.97 }}
-                                    className="bg-[#E6F9F0] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                    className="bg-[#EEF0FD] rounded-2xl p-5 border border-black/5 cursor-pointer"
                                 >
                                     <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#28C76F] flex items-center justify-center text-white text-xl shadow-sm shadow-green-300">
-                                            <MdSwapHoriz />
+                                        <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white text-xl shadow-sm shadow-orange-300">
+                                            <FaPassport />
                                         </div>
-                                        <p className="text-base font-bold text-gray-600">Visa Applications</p>
+                                        <p className="text-base font-bold text-gray-600">Total</p>
                                     </div>
                                     <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.total}</h3>
-                                    <p className="text-[13px] font-bold text-emerald-600">All Applications</p>
+                                    <p className="text-[13px] font-bold text-orange-500">All Applications</p>
                                 </motion.div>
 
-                                {/* Umrah Applications — only for sub-admins granted Umrah access */}
-                                {userData?.umrahAccess && (
-                                    <motion.div
-                                        variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                        whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(0,180,216,0.25)" }}
-                                        transition={{ duration: 0.35, ease: "easeOut" }}
-                                        onClick={() => setActiveTab("umrah")}
-                                        whileTap={{ scale: 0.97 }}
-                                        className="bg-[#E0F3FE] rounded-2xl p-5 border border-black/5 cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-10 h-10 rounded-xl bg-[#00B4D8] flex items-center justify-center text-white text-xl shadow-sm shadow-sky-300">
-                                                <FaKaaba />
-                                            </div>
-                                            <p className="text-base font-bold text-gray-600">Umrah Applications</p>
-                                        </div>
-                                        <h3 className="text-3xl font-bold text-gray-800 mb-1">{umrahRequests.length}</h3>
-                                        <p className="text-[13px] font-bold text-sky-600">PKR {umrahRevenue.toLocaleString()} collected</p>
-                                    </motion.div>
-                                )}
-
-                                {/* Insurance Revenue */}
+                                {/* Doc Received */}
                                 <motion.div
                                     variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(255,179,0,0.25)" }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(14,165,233,0.25)" }}
                                     transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => navigate("/subadmin/revenue")}
+                                    onClick={() => { setStatusFilter("Doc Received"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#E0F3FE] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white text-xl shadow-sm shadow-sky-300">
+                                            <MdOutlineContentCopy />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Doc Received</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.docReceived}</h3>
+                                    <p className="text-[13px] font-bold text-sky-500">Awaiting Review</p>
+                                </motion.div>
+
+                                {/* Analyzing */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(251,191,36,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("Analyzing"); setActiveTab("visas"); }}
                                     whileTap={{ scale: 0.97 }}
                                     className="bg-[#FFF8E1] rounded-2xl p-5 border border-black/5 cursor-pointer"
                                 >
                                     <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#FFB300] flex items-center justify-center text-white text-xl shadow-sm shadow-amber-300">
-                                            <FaUserShield />
+                                        <div className="w-10 h-10 rounded-xl bg-amber-400 flex items-center justify-center text-white text-xl shadow-sm shadow-amber-200">
+                                            <MdSwapHoriz />
                                         </div>
-                                        <p className="text-base font-bold text-gray-600">Insurance Revenue</p>
+                                        <p className="text-base font-bold text-gray-600">Analyzing</p>
                                     </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {insuranceRevenue.toLocaleString()}</h3>
-                                    <p className="text-[13px] font-bold text-amber-600">PKR {insuranceRevenue.toLocaleString()} collected</p>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.analyzing}</h3>
+                                    <p className="text-[13px] font-bold text-amber-500">In Progress</p>
+                                </motion.div>
+
+                                {/* Approved */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(16,185,129,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("Approve"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#E6F9F0] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white text-xl shadow-sm shadow-emerald-300">
+                                            <MdCheckCircle />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Approved</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.approved}</h3>
+                                    <p className="text-[13px] font-bold text-emerald-500">+22% this month</p>
+                                </motion.div>
+
+                                {/* Rejected */}
+                                <motion.div
+                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(248,113,113,0.25)" }}
+                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                    onClick={() => { setStatusFilter("Reject"); setActiveTab("visas"); }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="bg-[#FEE8E8] rounded-2xl p-5 border border-black/5 cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-red-400 flex items-center justify-center text-white text-xl shadow-sm shadow-red-200">
+                                            <MdReceipt />
+                                        </div>
+                                        <p className="text-base font-bold text-gray-600">Rejected</p>
+                                    </div>
+                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.rejected}</h3>
+                                    <p className="text-[13px] font-bold text-red-400">Applications</p>
                                 </motion.div>
                             </motion.div>
 
@@ -1166,16 +1190,16 @@ export default function SubAdminPanel() {
                                 >
                                     <div className="flex items-start justify-between mb-1">
                                         <div>
-                                            <h3 className="text-4xl font-bold text-gray-800">{stats.approved}</h3>
-                                            <p className="text-base font-semibold text-gray-400 mt-1">Total Approved Visas</p>
+                                            <h3 className="text-4xl font-bold text-gray-800">{stats.analyzing}</h3>
+                                            <p className="text-base font-semibold text-gray-400 mt-1">Currently Analyzing</p>
                                         </div>
                                         <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
                                             <MdOutlineCreditCard className="text-orange-500 text-2xl" />
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
-                                        <span className="text-[13px] font-bold text-emerald-600">+35% vs Last Month</span>
-                                        <button onClick={() => { setStatusFilter("Approve"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
+                                        <span className="text-[13px] font-bold text-amber-500">In Progress</span>
+                                        <button onClick={() => { setStatusFilter("Analyzing"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
                                     </div>
                                 </motion.div>
 
@@ -1304,7 +1328,7 @@ export default function SubAdminPanel() {
                                                     barSize={10}
                                                     data={[
                                                         { name: "Approve", value: donutData.approvedPct, fill: "#6366F1" },
-                                                        { name: "Reject", value: donutData.rejectedPct, fill: "#EF4444" },
+                                                        { name: "Pending", value: donutData.pendingPct, fill: "#FBBF24" },
                                                     ]}
                                                     startAngle={90}
                                                     endAngle={-270}
@@ -1327,10 +1351,10 @@ export default function SubAdminPanel() {
                                                 </span>
                                             </div>
                                             <div>
-                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.rejected}</p>
-                                                <p className="text-[13px] font-bold text-red-500 mt-0.5">Rejected</p>
-                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">
-                                                    ▲ {donutData.rejectedPct}%
+                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.pending}</p>
+                                                <p className="text-[13px] font-bold text-amber-500 mt-0.5">Pending</p>
+                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                                                    ▲ {donutData.pendingPct}%
                                                 </span>
                                             </div>
                                         </div>

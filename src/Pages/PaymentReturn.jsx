@@ -304,6 +304,7 @@ export default function PaymentReturn() {
         applicantName: parsedUmrahData.applicantName,
         email: parsedUmrahData.email,
         phone: parsedUmrahData.phone,
+        hotel: parsedUmrahData.hotel,
         amountPaid,
         transactionId: paymentVerification.data?.TransactionId || orderId,
         transactionRef: orderId,

@@ -255,6 +255,8 @@ export default function UmrahProcessList({ requests, actorRole = 'admin', actorN
                 paymentAmount: amount,
                 paymentNote: noteInput || '',
                 paymentStatus: 'Unpaid',
+                // Pay Now button on the user's dashboard expires 24h after this.
+                paymentRequestedAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 statusHistory: [
                     ...(paymentModal.statusHistory || []),

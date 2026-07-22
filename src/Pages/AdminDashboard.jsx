@@ -28,6 +28,7 @@ import DocumentViewer from "../Components/DocumentViewer";
 import UmrahProcessList from "../Components/UmrahProcessList";
 import VisaDocumentRequests from "../Components/VisaDocumentRequests";
 import VisaInterviewDocuments from "../Components/VisaInterviewDocuments";
+import InsuranceProcessList from "../Components/InsuranceProcessList";
 import VisaAnalytics from "../Components/VisaAnalytics";
 import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
@@ -1151,6 +1152,7 @@ export default function AdminDashboard() {
         { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
         { id: "visas", label: "Visas", icon: <FaPassport /> },
         { id: "inquiries", label: "Umrah Requests", icon: <FaKaaba /> },
+        { id: "insurance", label: "Insurance", icon: <FaUserShield /> },
         { id: "messages", label: "Messages", icon: <MdMessage /> },
         { id: "subadmins", label: "Sub-Admins", icon: <FaUsersCog /> },
     ];
@@ -1166,6 +1168,7 @@ export default function AdminDashboard() {
         : ({
             overview: "Your travel agency overview",
             inquiries: "Track Umrah package inquiries and bookings",
+            insurance: "All customer insurance policy records and invoices",
             messages: "Customer messages and support requests",
             subadmins: "Team access control and permissions",
         }[activeTab] || "\u00A0");
@@ -1641,6 +1644,11 @@ export default function AdminDashboard() {
                     {/* ════ UMRAH REQUESTS TAB ════ */}
                     {activeTab === "inquiries" && (
                         <UmrahProcessList requests={umrahRequests} actorRole="admin" actorName={currentUser?.email || "Admin"} />
+                    )}
+
+                    {/* ════ INSURANCE TAB ════ */}
+                    {activeTab === "insurance" && (
+                        <InsuranceProcessList policies={[...policies, ...gatewayPolicies]} />
                     )}
 
                     {/* ════ MESSAGES TAB ════ */}

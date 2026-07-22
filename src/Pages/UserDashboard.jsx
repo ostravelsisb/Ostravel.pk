@@ -6,7 +6,7 @@ import { collection, query, getDocs, orderBy, doc, updateDoc, where, getDoc, onS
 const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
 import { useAuth } from '../Context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt, HiReceiptTax } from 'react-icons/hi'; // Added HiChatAlt, HiReceiptTax
+import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt, HiReceiptTax, HiCreditCard, HiClock } from 'react-icons/hi'; // Added HiChatAlt, HiReceiptTax, HiCreditCard, HiClock
 import { updateApplicationData, markMessageSeen, hasUnseenMessage, saveUserMessage, markBadgeSeen, hasUnseenBadge } from '../Utils/ApplicationEditUtils';
 import { getCachedData, setCachedData } from '../Utils/cacheUtils';
 import { getAllCountryNames, getVisaDataByCountry } from '../Data/visaData'; // Import country data
@@ -77,6 +77,35 @@ const UserDashboard = () => {
     const [fileInputs, setFileInputs] = useState({}); // { passport: File, photo: File, ... }
 
     const [saving, setSaving] = useState(false);
+
+    // Ticks once a minute so the Umrah "Pay Now" 24h expiry countdown/cutoff
+    // below stays accurate without needing a page refresh.
+    const [nowTick, setNowTick] = useState(() => Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNowTick(Date.now()), 60 * 1000);
+        return () => clearInterval(id);
+    }, []);
+
+    const PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+    // Falls back to the "Payment Requested" statusHistory entry, then
+    // updatedAt, for requests created before paymentRequestedAt existed.
+    const getPaymentRequestedAt = (r) => {
+        const raw = r.paymentRequestedAt
+            || (r.statusHistory || []).slice().reverse().find(h => h.status === 'Payment Requested')?.timestamp
+            || r.updatedAt
+            || null;
+        return raw ? new Date(raw).getTime() : null;
+    };
+    const getPaymentDeadline = (r) => {
+        const requestedAt = getPaymentRequestedAt(r);
+        return requestedAt ? requestedAt + PAYMENT_WINDOW_MS : null;
+    };
+    const formatRemaining = (ms) => {
+        const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        return `${h}h ${m}m left`;
+    };
 
     // Date Filters
     const [startDate, setStartDate] = useState('');
@@ -481,19 +510,73 @@ const UserDashboard = () => {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-6 w-fit">
-                    <button onClick={() => setActiveTab('visa')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'visa' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
-                        Visa Applications ({filteredVisas.length})
-                    </button>
-                    <button onClick={() => setActiveTab('insurance')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'insurance' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
-                        Insurance Policies ({filteredPolicies.length})
-                    </button>
-                    <button onClick={() => setActiveTab('umrah')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all relative ${activeTab === 'umrah' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
-                        Umrah Requests ({umrahRequests.length})
-                        {umrahRequests.some(r => r.status === 'Payment Requested') && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-white animate-pulse" />
-                        )}
-                    </button>
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+                    <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit">
+                        <button onClick={() => setActiveTab('visa')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'visa' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            Visa Applications ({filteredVisas.length})
+                        </button>
+                        <button onClick={() => setActiveTab('insurance')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'insurance' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            Insurance Policies ({filteredPolicies.length})
+                        </button>
+                        <button onClick={() => setActiveTab('umrah')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all relative ${activeTab === 'umrah' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            Umrah Requests ({umrahRequests.length})
+                            {umrahRequests.some(r => r.status === 'Payment Requested') && (
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-white animate-pulse" />
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Quick Pay Now — only shown while on the Umrah Requests tab,
+                        for the nearest unpaid, unexpired payment request. */}
+                    {activeTab === 'umrah' && (() => {
+                        const payable = umrahRequests
+                            .filter(r => r.status === 'Payment Requested' && r.paymentStatus !== 'Paid')
+                            .filter(r => {
+                                const deadline = getPaymentDeadline(r);
+                                return deadline === null || nowTick < deadline;
+                            })
+                            .sort((a, b) => (getPaymentDeadline(a) || Infinity) - (getPaymentDeadline(b) || Infinity))[0];
+                        if (!payable) return null;
+                        const deadline = getPaymentDeadline(payable);
+                        const urgent = deadline && (deadline - nowTick) < 60 * 60 * 1000; // < 1h left
+                        return (
+                            <motion.button
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => {
+                                    localStorage.setItem('pending_umrah_payment', JSON.stringify({
+                                        umrahDocId: payable.id,
+                                        requestNumber: payable.requestNumber,
+                                        applicantName: payable.user?.name || payable.userName,
+                                        email: payable.userEmail || payable.user?.email || currentUser?.email,
+                                        phone: payable.user?.contact,
+                                        hotel: payable.makkah?.hotel,
+                                        checkIn: payable.makkah?.checkIn,
+                                        checkOut: payable.makkah?.checkOut,
+                                        paymentAmount: payable.paymentAmount,
+                                        paymentNote: payable.paymentNote,
+                                    }));
+                                    window.location.href = '/umrah-payment';
+                                }}
+                                className="group relative flex items-center gap-3 pl-5 pr-4 py-2.5 rounded-xl font-black text-sm text-white overflow-hidden bg-gradient-to-r from-purple-600 via-purple-600 to-fuchsia-600 shadow-lg shadow-purple-300/50 transition-shadow hover:shadow-xl hover:shadow-purple-300/60"
+                            >
+                                {/* Subtle animated sheen */}
+                                <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+                                <HiCreditCard className="w-5 h-5 relative shrink-0" />
+                                <span className="relative flex flex-col items-start leading-tight">
+                                    <span className="text-[10px] font-bold uppercase tracking-wide text-purple-100">Pay Now</span>
+                                    <span className="text-sm font-black">PKR {Number(payable.paymentAmount || 0).toLocaleString()}</span>
+                                </span>
+                                {deadline && (
+                                    <span className={`relative text-[11px] font-bold px-2 py-1 rounded-full ml-1 flex items-center gap-1 ${urgent ? 'bg-red-500/90 animate-pulse' : 'bg-white/20'}`}>
+                                        <HiClock className="w-3 h-3" /> {formatRemaining(deadline - nowTick)}
+                                    </span>
+                                )}
+                            </motion.button>
+                        );
+                    })()}
                 </div>
 
                 {/* Content Area */}
@@ -540,6 +623,23 @@ const UserDashboard = () => {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${getStatusBadge(visa.status)}`}>{visa.status || 'Pending'}</span>
+                                                    {(visa.interviewDocuments || []).length > 0 && (
+                                                        <div className="mt-2 space-y-1">
+                                                            <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wide">Interview Documents</p>
+                                                            {visa.interviewDocuments.map((d) => (
+                                                                <a
+                                                                    key={d.id}
+                                                                    href={d.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="flex items-center gap-1 text-[11px] font-bold text-purple-600 hover:text-purple-800 w-fit"
+                                                                >
+                                                                    📎 {d.name}
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                     {visa.decisionDocURL && (
                                                         <a
                                                             href={visa.decisionDocURL}
@@ -695,30 +795,31 @@ const UserDashboard = () => {
 
                                             <div className="text-right shrink-0">
                                                 {r.status === 'Payment Requested' && r.paymentStatus !== 'Paid' ? (
-                                                    <>
-                                                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">Amount Due</p>
-                                                        <p className="text-2xl font-black text-purple-700 mb-3">PKR {Number(r.paymentAmount || 0).toLocaleString()}</p>
-                                                        <button
-                                                            onClick={() => {
-                                                                localStorage.setItem('pending_umrah_payment', JSON.stringify({
-                                                                    umrahDocId: r.id,
-                                                                    requestNumber: r.requestNumber,
-                                                                    applicantName: r.user?.name || r.userName,
-                                                                    email: r.userEmail || r.user?.email || currentUser?.email,
-                                                                    phone: r.user?.contact,
-                                                                    hotel: r.makkah?.hotel,
-                                                                    checkIn: r.makkah?.checkIn,
-                                                                    checkOut: r.makkah?.checkOut,
-                                                                    paymentAmount: r.paymentAmount,
-                                                                    paymentNote: r.paymentNote,
-                                                                }));
-                                                                window.location.href = '/umrah-payment';
-                                                            }}
-                                                            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-sm shadow-lg shadow-purple-200 transition"
-                                                        >
-                                                            Pay Now
-                                                        </button>
-                                                    </>
+                                                    (() => {
+                                                        const deadline = getPaymentDeadline(r);
+                                                        const expired = deadline !== null && nowTick >= deadline;
+                                                        // return (
+                                                        //     <>
+                                                        //         <p className="text-xs text-slate-400 font-bold uppercase mb-1">Amount Due</p>
+                                                        //         <p className="text-2xl font-black text-purple-700 mb-1">PKR {Number(r.paymentAmount || 0).toLocaleString()}</p>
+                                                        //         {expired ? (
+                                                        //             <>
+                                                        //                 <p className="text-xs text-red-500 font-bold">Payment window expired</p>
+                                                        //                 <p className="text-[11px] text-slate-400 mt-1 max-w-[170px]">Contact our team to request a new payment link.</p>
+                                                        //             </>
+                                                        //         ) : (
+                                                        //             <>
+                                                        //                 {deadline && (
+                                                        //                     <p className="text-[11px] text-amber-600 font-bold mb-1">{formatRemaining(deadline - nowTick)}</p>
+                                                        //                 )}
+                                                        //                 <p className="text-[11px] text-purple-500 font-bold flex items-center justify-end gap-1">
+                                                        //                     <HiCreditCard className="w-3.5 h-3.5" /> Use "Pay Now" above ↑
+                                                        //                 </p>
+                                                        //             </>
+                                                        //         )}
+                                                        //     </>
+                                                        // );
+                                                    })()
                                                 ) : r.paymentAmount ? (
                                                     <p className="text-sm font-bold text-emerald-600">PKR {Number(r.paymentAmount).toLocaleString()} — {r.paymentStatus}</p>
                                                 ) : (

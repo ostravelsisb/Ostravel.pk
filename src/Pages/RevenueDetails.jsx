@@ -9,7 +9,7 @@ import {
     MdLogout, MdMenu, MdArrowBack, MdPerson, MdEmail,
     MdVerifiedUser, MdOutlineContentCopy, MdCheck
 } from "react-icons/md";
-import { FaUserShield, FaRegPaperPlane, FaPassport } from "react-icons/fa";
+import { FaUserShield, FaRegPaperPlane, FaPassport, FaKaaba } from "react-icons/fa";
 import LoadingSpinner from "../Components/LoadingSpinner";
 import InvoiceModal from "../Components/InvoiceModal";
 
@@ -18,7 +18,7 @@ const ITEMS_PER_PAGE = 10;
 
 const SOURCE_STYLES = {
     Insurance: "bg-sky-50 text-sky-700 border-sky-200",
-    Gateway: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    Umrah: "bg-purple-50 text-purple-700 border-purple-200",
     Visa: "bg-orange-50 text-orange-700 border-orange-200",
 };
 const STATUS_STYLES = {
@@ -111,8 +111,11 @@ function TransactionCard({ tx, showEmail = true, onViewInvoice }) {
         || null;
     const name = tx?.travelerName || tx?.customerName || tx?.userName || tx?.applicantName || tx?.Name || "Unknown";
     const email = tx?.userEmail || tx?.customerEmail || tx?.email || tx?.Email || "—";
-    const policyNo = tx?.policyNumber || tx?.orderId || tx?.applicationNumber || "—";
-    const planName = tx?.planName || tx?.planDetails?.PlanName || (tx?._source === "Visa" ? (tx?.visaType || "Visa Application") : "Standard Plan");
+    const policyNo = tx?.policyNumber || tx?.orderId || tx?.applicationNumber || tx?.requestNumber || "—";
+    const planName = tx?.planName || tx?.planDetails?.PlanName
+        || (tx?._source === "Visa" ? (tx?.visaType || "Visa Application")
+        : tx?._source === "Umrah" ? (tx?.makkah?.hotel || "Umrah Package")
+        : "Standard Plan");
     const source = tx?._source || "Insurance";
     const status = tx?.status || tx?.paymentStatus || "PAID";
     const statusKey = STATUS_STYLES[status?.toUpperCase?.()] ? status.toUpperCase() : "DEFAULT";
@@ -152,7 +155,7 @@ function TransactionCard({ tx, showEmail = true, onViewInvoice }) {
             {/* Policy details */}
             <div className="space-y-2">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {source === "Visa" ? "Order Ref" : "Policy"}
+                    {source === "Visa" ? "Order Ref" : source === "Umrah" ? "Request #" : "Policy"}
                 </div>
                 <button onClick={handleCopy} title="Copy to clipboard"
                     className="flex items-center gap-2 text-left group/copy">
@@ -208,7 +211,7 @@ export default function RevenueDetails() {
     const backPath = isSubAdmin ? "/subadmin/dashboard" : "/admin/dashboard";
 
     const [policies, setPolicies] = useState([]);
-    const [gatewayPolicies, setGatewayPolicies] = useState([]);
+    const [umrahPayments, setUmrahPayments] = useState([]);
     const [visaPayments, setVisaPayments] = useState([]);
     const [search, setSearch] = useState("");
     const [sourceFilter, setSourceFilter] = useState("All");
@@ -231,13 +234,17 @@ export default function RevenueDetails() {
             },
             (e) => { console.error("insurancesCustumer onSnapshot error:", e); setLoading(false); }
         );
-        const gatewayUnsub = onSnapshot(
-            query(collection(db, "policies"), orderBy("orderDate", "desc")),
+        // Umrah requests that have actually been paid (status: "Paid",
+        // set by PaymentReturn.jsx once the gateway confirms the transaction).
+        const umrahUnsub = onSnapshot(
+            query(collection(db, "umrahApplications"), orderBy("applicationDate", "desc")),
             (snap) => {
-                const data = snap.docs.map(d => ({ id: d.id, _source: "Gateway", ...d.data() }));
-                setGatewayPolicies(data);
+                const data = snap.docs
+                    .map(d => ({ id: d.id, _source: "Umrah", ...d.data() }))
+                    .filter(u => (Number(u.amountPaid) || 0) > 0);
+                setUmrahPayments(data);
             },
-            (e) => { console.error("policies onSnapshot error:", e); }
+            (e) => { console.error("umrahApplications onSnapshot error:", e); }
         );
         // Visa applications that were actually paid for via the gateway
         // (PaymentReturn.jsx writes these straight into visaApplications,
@@ -252,7 +259,7 @@ export default function RevenueDetails() {
             },
             (e) => { console.error("visaApplications onSnapshot error:", e); }
         );
-        return () => { insuranceUnsub(); gatewayUnsub(); visaUnsub(); };
+        return () => { insuranceUnsub(); umrahUnsub(); visaUnsub(); };
     }, []);
 
     // Helpers — read across both schemas
@@ -267,7 +274,7 @@ export default function RevenueDetails() {
         // Drop dev-only bypass test records (order IDs starting VISA-TEST-) —
         // these were never real payments, see PaymentReturn.jsx verifyPayment().
         const isRealPayment = (t) => !String(t?.orderId || "").startsWith("VISA-TEST-");
-        const all = [...policies, ...gatewayPolicies, ...visaPayments].filter(isRealPayment);
+        const all = [...policies, ...umrahPayments, ...visaPayments].filter(isRealPayment);
         if (!isSubAdmin) return all;
         if (assignedCountries.length === 0) return [];
         // Sub-admins only see transactions for their assigned countries.
@@ -276,7 +283,7 @@ export default function RevenueDetails() {
             const c = getCountry(t);
             return c && lower.includes(String(c).toLowerCase());
         });
-    }, [policies, gatewayPolicies, visaPayments, isSubAdmin, assignedCountries]);
+    }, [policies, umrahPayments, visaPayments, isSubAdmin, assignedCountries]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -321,7 +328,7 @@ export default function RevenueDetails() {
     // KPI row
     const totalRevenue = sortedFiltered.reduce((a, t) => a + (Number(t?.amount ?? t?.amountPaid ?? 0) || 0), 0);
     const sourceCounts = useMemo(() => {
-        const c = { All: sortedFiltered.length, Insurance: 0, Gateway: 0, Visa: 0 };
+        const c = { All: sortedFiltered.length, Insurance: 0, Umrah: 0, Visa: 0 };
         sortedFiltered.forEach(t => { c[t._source] = (c[t._source] || 0) + 1; });
         return c;
     }, [sortedFiltered]);
@@ -330,7 +337,7 @@ export default function RevenueDetails() {
 
     if (loading) return <LoadingSpinner />;
 
-    const sourceOptions = ["All", "Insurance", "Gateway", "Visa"];
+    const sourceOptions = ["All", "Insurance", "Umrah", "Visa"];
 
     return (
         <div className="flex h-screen bg-[#f5f5f5] overflow-hidden"
@@ -386,7 +393,7 @@ export default function RevenueDetails() {
                                         ? `for your ${assignedCountries.length} assigned ${assignedCountries.length === 1 ? "country" : "countries"}`
                                         : "— no countries assigned yet"
                                 }`
-                                : "All purchases from the payment gateway, insurance booking, and visa application flows"}
+                                : "All purchases from insurance bookings, visa applications, and Umrah payments"}
                         </p>
                     </motion.div>
 
@@ -414,11 +421,11 @@ export default function RevenueDetails() {
                         <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                             className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
                             <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 text-xl"><MdEmail /></div>
-                                <p className="text-base font-bold text-gray-600">Gateway</p>
+                                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 text-xl"><FaKaaba /></div>
+                                <p className="text-base font-bold text-gray-600">Umrah</p>
                             </div>
-                            <h3 className="text-3xl font-bold text-gray-800 mb-1">{sourceCounts.Gateway || 0}</h3>
-                            <p className="text-[13px] font-bold text-emerald-600">Insurance paid via gateway</p>
+                            <h3 className="text-3xl font-bold text-gray-800 mb-1">{sourceCounts.Umrah || 0}</h3>
+                            <p className="text-[13px] font-bold text-purple-600">Umrah fees paid via gateway</p>
                         </motion.div>
                         <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                             className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
@@ -512,7 +519,7 @@ export default function RevenueDetails() {
             {invoiceRecord && (
                 <InvoiceModal
                     record={invoiceRecord}
-                    recordType={invoiceRecord._source === "Visa" ? "visa" : "insurance"}
+                    recordType={invoiceRecord._source === "Visa" ? "visa" : invoiceRecord._source === "Umrah" ? "umrah" : "insurance"}
                     onClose={() => setInvoiceRecord(null)}
                 />
             )}

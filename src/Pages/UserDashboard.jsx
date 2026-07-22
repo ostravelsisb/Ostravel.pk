@@ -6,7 +6,7 @@ import { collection, query, getDocs, orderBy, doc, updateDoc, where, getDoc, onS
 const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
 import { useAuth } from '../Context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt, HiReceiptTax, HiCreditCard, HiClock } from 'react-icons/hi'; // Added HiChatAlt, HiReceiptTax, HiCreditCard, HiClock
+import { HiEye, HiPencil, HiX, HiPrinter, HiUpload, HiDocument, HiChatAlt, HiReceiptTax, HiCreditCard, HiClock, HiChevronDown } from 'react-icons/hi'; // Added HiChatAlt, HiReceiptTax, HiCreditCard, HiClock
 import { updateApplicationData, markMessageSeen, hasUnseenMessage, saveUserMessage, markBadgeSeen, hasUnseenBadge } from '../Utils/ApplicationEditUtils';
 import { getCachedData, setCachedData } from '../Utils/cacheUtils';
 import { getAllCountryNames, getVisaDataByCountry } from '../Data/visaData'; // Import country data
@@ -66,6 +66,7 @@ const UserDashboard = () => {
     const [userMsgText, setUserMsgText] = useState('');
     const [sendingUserMsg, setSendingUserMsg] = useState(false);
     const [invoiceRecord, setInvoiceRecord] = useState(null); // { record, recordType }
+    const [expandedUmrahId, setExpandedUmrahId] = useState(null);
 
     // Edit States
     const [editingVisa, setEditingVisa] = useState(null);
@@ -724,111 +725,129 @@ const UserDashboard = () => {
                                     <p className="text-sm text-slate-400 mt-1">Submit a request from the Hajj & Umrah page to get a custom quote.</p>
                                 </div>
                             ) : (
-                                umrahRequests.map((r) => (
-                                    <div key={r.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
-                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                            <div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <p className="font-black text-slate-900">{r.makkah?.hotel}</p>
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                                        r.status === 'Payment Requested' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                                        r.status === 'Documents Required' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                        r.status === 'Paid' || r.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                        r.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200' :
-                                                        r.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                        'bg-amber-50 text-amber-700 border-amber-200'
-                                                    }`}>
-                                                        {r.status || 'Pending Review'}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-slate-400 font-mono mt-0.5">{r.requestNumber}</p>
-                                                <p className="text-sm text-slate-500 mt-2">
-                                                    {r.makkah?.checkIn} → {r.makkah?.checkOut} · {r.makkah?.nights || 0} nights · {r.makkah?.rooms || 1} room(s)
-                                                </p>
-                                                {r.paymentNote && r.status === 'Payment Requested' && (
-                                                    <p className="text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 mt-3 max-w-md">{r.paymentNote}</p>
-                                                )}
-
-                                                {r.documentRequests?.length > 0 && (
-                                                    <div className="mt-4 space-y-2 max-w-md">
-                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Documents Requested</p>
-                                                        {r.documentRequests.map((d) => (
-                                                            <div key={d.id} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
-                                                                <div className="min-w-0">
-                                                                    <p className="font-bold text-slate-800 text-sm truncate">{d.name}</p>
-                                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                                                        d.status === 'Verified' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                                        d.status === 'Uploaded' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                                        d.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200' :
-                                                                        'bg-orange-50 text-orange-700 border-orange-200'
-                                                                    }`}>
-                                                                        {d.status}
-                                                                    </span>
-                                                                    {d.status === 'Rejected' && d.note && (
-                                                                        <p className="text-xs text-red-600 mt-1">Reason: {d.note}</p>
-                                                                    )}
-                                                                </div>
-                                                                <div className="shrink-0">
-                                                                    {(d.status === 'Requested' || d.status === 'Rejected') ? (
-                                                                        <label className={`px-3 py-2 rounded-lg text-xs font-black cursor-pointer flex items-center gap-1.5 transition ${uploadingDocId === d.id ? 'bg-slate-200 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
-                                                                            <HiUpload className="w-4 h-4" />
-                                                                            {uploadingDocId === d.id ? 'Uploading...' : d.status === 'Rejected' ? 'Re-upload' : 'Upload'}
-                                                                            <input
-                                                                                type="file"
-                                                                                accept="image/jpeg,image/png"
-                                                                                className="hidden"
-                                                                                disabled={uploadingDocId === d.id}
-                                                                                onChange={(e) => e.target.files?.[0] && handleUmrahDocUpload(r, d, e.target.files[0])}
-                                                                            />
-                                                                        </label>
-                                                                    ) : d.fileUrl ? (
-                                                                        <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-1.5">
-                                                                            <HiEye className="w-4 h-4" /> View
-                                                                        </a>
-                                                                    ) : null}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                umrahRequests.map((r) => {
+                                    const isExpanded = expandedUmrahId === r.id;
+                                    const hasExtra = (r.documentRequests?.length > 0) || (r.paymentNote && r.status === 'Payment Requested');
+                                    return (
+                                    <div key={r.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                        <div
+                                            className={`flex flex-wrap md:flex-nowrap items-center gap-3 md:gap-5 px-5 py-3.5 ${hasExtra ? 'cursor-pointer hover:bg-slate-50' : ''} transition-colors`}
+                                            onClick={() => hasExtra && setExpandedUmrahId(isExpanded ? null : r.id)}
+                                        >
+                                            {/* Hotel + status */}
+                                            <div className="flex items-center gap-2 min-w-0 flex-1 basis-[220px]">
+                                                <p className="font-black text-slate-900 text-sm truncate">{r.makkah?.hotel || 'Umrah Request'}</p>
+                                                <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                                    r.status === 'Payment Requested' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                    r.status === 'Documents Required' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                    r.status === 'Paid' || r.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                    r.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+                                                    r.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                    'bg-amber-50 text-amber-700 border-amber-200'
+                                                }`}>
+                                                    {r.status || 'Pending Review'}
+                                                </span>
                                             </div>
 
-                                            <div className="text-right shrink-0">
+                                            {/* Request # */}
+                                            <p className="text-xs text-slate-400 font-mono shrink-0 basis-[140px]">{r.requestNumber}</p>
+
+                                            {/* Dates */}
+                                            <p className="text-xs text-slate-500 shrink-0 basis-[220px] truncate">
+                                                {r.makkah?.checkIn} → {r.makkah?.checkOut} · {r.makkah?.nights || 0}n · {r.makkah?.rooms || 1} rm
+                                            </p>
+
+                                            {/* Amount / payment status */}
+                                            <div className="ml-auto shrink-0 text-right">
                                                 {r.status === 'Payment Requested' && r.paymentStatus !== 'Paid' ? (
                                                     (() => {
                                                         const deadline = getPaymentDeadline(r);
                                                         const expired = deadline !== null && nowTick >= deadline;
-                                                        // return (
-                                                        //     <>
-                                                        //         <p className="text-xs text-slate-400 font-bold uppercase mb-1">Amount Due</p>
-                                                        //         <p className="text-2xl font-black text-purple-700 mb-1">PKR {Number(r.paymentAmount || 0).toLocaleString()}</p>
-                                                        //         {expired ? (
-                                                        //             <>
-                                                        //                 <p className="text-xs text-red-500 font-bold">Payment window expired</p>
-                                                        //                 <p className="text-[11px] text-slate-400 mt-1 max-w-[170px]">Contact our team to request a new payment link.</p>
-                                                        //             </>
-                                                        //         ) : (
-                                                        //             <>
-                                                        //                 {deadline && (
-                                                        //                     <p className="text-[11px] text-amber-600 font-bold mb-1">{formatRemaining(deadline - nowTick)}</p>
-                                                        //                 )}
-                                                        //                 <p className="text-[11px] text-purple-500 font-bold flex items-center justify-end gap-1">
-                                                        //                     <HiCreditCard className="w-3.5 h-3.5" /> Use "Pay Now" above ↑
-                                                        //                 </p>
-                                                        //             </>
-                                                        //         )}
-                                                        //     </>
-                                                        // );
+                                                        return (
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="text-sm font-black text-purple-700">PKR {Number(r.paymentAmount || 0).toLocaleString()}</span>
+                                                                {expired ? (
+                                                                    <span className="text-[10px] text-red-500 font-bold">Window expired</span>
+                                                                ) : deadline ? (
+                                                                    <span className="text-[10px] text-amber-600 font-bold">{formatRemaining(deadline - nowTick)}</span>
+                                                                ) : null}
+                                                            </div>
+                                                        );
                                                     })()
                                                 ) : r.paymentAmount ? (
                                                     <p className="text-sm font-bold text-emerald-600">PKR {Number(r.paymentAmount).toLocaleString()} — {r.paymentStatus}</p>
                                                 ) : (
-                                                    <p className="text-xs text-slate-400 font-medium max-w-[160px]">Awaiting quote from our team</p>
+                                                    <p className="text-xs text-slate-400 font-medium">Awaiting quote</p>
                                                 )}
                                             </div>
+
+                                            {hasExtra && (
+                                                <HiChevronDown className={`shrink-0 w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                            )}
                                         </div>
+
+                                        <AnimatePresence>
+                                            {isExpanded && hasExtra && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="overflow-hidden border-t border-slate-100"
+                                                >
+                                                    <div className="px-5 py-4 bg-slate-50/60 space-y-3">
+                                                        {r.paymentNote && r.status === 'Payment Requested' && (
+                                                            <p className="text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 max-w-md">{r.paymentNote}</p>
+                                                        )}
+                                                        {r.documentRequests?.length > 0 && (
+                                                            <div className="space-y-2 max-w-md">
+                                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Documents Requested</p>
+                                                                {r.documentRequests.map((d) => (
+                                                                    <div key={d.id} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 bg-white">
+                                                                        <div className="min-w-0">
+                                                                            <p className="font-bold text-slate-800 text-sm truncate">{d.name}</p>
+                                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                                                                d.status === 'Verified' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                                                d.status === 'Uploaded' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                                d.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+                                                                                'bg-orange-50 text-orange-700 border-orange-200'
+                                                                            }`}>
+                                                                                {d.status}
+                                                                            </span>
+                                                                            {d.status === 'Rejected' && d.note && (
+                                                                                <p className="text-xs text-red-600 mt-1">Reason: {d.note}</p>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="shrink-0">
+                                                                            {(d.status === 'Requested' || d.status === 'Rejected') ? (
+                                                                                <label className={`px-3 py-2 rounded-lg text-xs font-black cursor-pointer flex items-center gap-1.5 transition ${uploadingDocId === d.id ? 'bg-slate-200 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                                                                                    <HiUpload className="w-4 h-4" />
+                                                                                    {uploadingDocId === d.id ? 'Uploading...' : d.status === 'Rejected' ? 'Re-upload' : 'Upload'}
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/jpeg,image/png"
+                                                                                        className="hidden"
+                                                                                        disabled={uploadingDocId === d.id}
+                                                                                        onClick={(e) => e.stopPropagation()}
+                                                                                        onChange={(e) => e.target.files?.[0] && handleUmrahDocUpload(r, d, e.target.files[0])}
+                                                                                    />
+                                                                                </label>
+                                                                            ) : d.fileUrl ? (
+                                                                                <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-1.5">
+                                                                                    <HiEye className="w-4 h-4" /> View
+                                                                                </a>
+                                                                            ) : null}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
-                                ))
+                                    );
+                                })
                             )}
                         </motion.div>
                     )}

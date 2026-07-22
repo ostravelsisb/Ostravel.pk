@@ -56,11 +56,18 @@ export default function PaymentReturn() {
   const getPaymentType = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const orderId = urlParams.get('O') || '';
+    // Order-ID prefix is checked first and is authoritative — this is what
+    // stopped Umrah payments (orderId "UMRAH-...") from falling through to
+    // stale leftover localStorage data (e.g. an old pending_visa_application)
+    // and being wrongly saved as a Visa Application.
+    if (orderId.toUpperCase().startsWith('UMRAH')) return 'umrah';
     if (orderId.toUpperCase().startsWith('VISA')) return 'visa';
 
+    const umrahData = localStorage.getItem('pending_umrah_payment');
     const visaData = localStorage.getItem('pending_visa_application');
     const insuranceData = sessionStorage.getItem('pending_policy');
 
+    if (umrahData) return 'umrah';
     if (visaData) return 'visa';
     if (insuranceData) return 'insurance';
     return null;
@@ -70,7 +77,7 @@ export default function PaymentReturn() {
     try {
       // PREVENT DUPLICATE: Check if already processed for this order
       const paymentType = getPaymentType();
-      const storageKey = paymentType === 'visa' ? 'latest_visa_application' : 'latest_policy';
+      const storageKey = paymentType === 'visa' ? 'latest_visa_application' : paymentType === 'umrah' ? 'latest_umrah_payment' : 'latest_policy';
       const existingRecord = localStorage.getItem(storageKey);
 
       // Unique deduplication key for this specific order attempt
@@ -85,7 +92,7 @@ export default function PaymentReturn() {
           setPaymentStatus('success');
           setPolicyDetails(previousState.policyData || previousState.applicationData);
           setTimeout(() => {
-            const redirectPath = paymentType === 'visa' ? '/visa-confirmation' : '/bookingconfirmation';
+            const redirectPath = paymentType === 'visa' ? '/visa-confirmation' : paymentType === 'umrah' ? '/dashboard' : '/bookingconfirmation';
             navigate(redirectPath, { state: previousState });
           }, 1000);
         } else {
@@ -108,7 +115,7 @@ export default function PaymentReturn() {
             setLoading(false);
 
             setTimeout(() => {
-              const redirectPath = paymentType === 'visa' ? '/visa-confirmation' : '/bookingconfirmation';
+              const redirectPath = paymentType === 'visa' ? '/visa-confirmation' : paymentType === 'umrah' ? '/dashboard' : '/bookingconfirmation';
               navigate(redirectPath, {
                 state: parsed
               });
@@ -141,6 +148,8 @@ export default function PaymentReturn() {
 
       if (paymentType === 'visa') {
         await processVisaApplication(orderId, paymentVerification);
+      } else if (paymentType === 'umrah') {
+        await processUmrahPayment(orderId, paymentVerification);
       } else {
         await processInsurancePolicy(orderId, paymentVerification);
       }
@@ -234,6 +243,81 @@ export default function PaymentReturn() {
       setTimeout(() => {
         navigate('/visa-confirmation');
       }, 3000);
+
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  // Process Umrah Payment
+  // Unlike visa/insurance, an Umrah request already exists in Firestore
+  // (created when the applicant submitted the request, quoted by admin) —
+  // payment just needs to mark that same doc Paid, not create a new record.
+  const processUmrahPayment = async (orderId, paymentVerification) => {
+    try {
+      const umrahData = localStorage.getItem('pending_umrah_payment');
+      if (!umrahData) {
+        throw new Error('Umrah payment data not found. Please restart the process.');
+      }
+      const parsedUmrahData = JSON.parse(umrahData);
+      const { umrahDocId } = parsedUmrahData;
+      if (!umrahDocId) {
+        throw new Error('Umrah request reference not found. Please restart the process.');
+      }
+
+      setProcessingStage('Confirming your Umrah payment...');
+
+      const amountPaid = parseFloat(paymentVerification.data?.TransactionAmount || parsedUmrahData.paymentAmount || 0);
+      const { doc, updateDoc, serverTimestamp: sts } = await import('firebase/firestore');
+
+      await updateDoc(doc(db, 'umrahApplications', umrahDocId), {
+        status: 'Paid',
+        paymentStatus: 'Paid',
+        amountPaid,
+        transactionId: paymentVerification.data?.TransactionId || orderId,
+        transactionRef: paymentVerification.data?.TransactionReferenceNumber || orderId,
+        paymentMethod: 'Bank Alfalah',
+        paidAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        statusHistory: [
+          ...(parsedUmrahData.statusHistory || []),
+          { status: 'Paid', timestamp: new Date().toISOString(), updatedBy: 'system' }
+        ]
+      });
+
+      const completePaymentData = {
+        orderId,
+        umrahDocId,
+        requestNumber: parsedUmrahData.requestNumber,
+        applicantName: parsedUmrahData.applicantName,
+        amountPaid,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('latest_umrah_payment', JSON.stringify(completePaymentData));
+      localStorage.removeItem('pending_umrah_payment');
+
+      // Fire-and-forget invoice email — never blocks the UI flow
+      sendInvoiceEmail({
+        to: parsedUmrahData.email,
+        recordType: 'umrah',
+        invoiceNumber: parsedUmrahData.requestNumber,
+        applicantName: parsedUmrahData.applicantName,
+        email: parsedUmrahData.email,
+        phone: parsedUmrahData.phone,
+        amountPaid,
+        transactionId: paymentVerification.data?.TransactionId || orderId,
+        transactionRef: orderId,
+        paymentMethod: 'Bank Alfalah',
+        paidAt: new Date().toISOString(),
+      });
+
+      setPaymentStatus('success');
+      setPolicyDetails({ policyNumber: parsedUmrahData.requestNumber });
+      setLoading(false);
+
+      setTimeout(() => {
+        navigate('/dashboard', { state: { activeTab: 'umrah' } });
+      }, 2000);
 
     } catch (err) {
       throw err;
@@ -618,7 +702,7 @@ export default function PaymentReturn() {
           <button
             onClick={() => {
               const paymentType = getPaymentType();
-              navigate(paymentType === 'visa' ? '/apply-visa' : '/packages');
+              navigate(paymentType === 'visa' ? '/apply-visa' : paymentType === 'umrah' ? '/dashboard' : '/packages');
             }}
             className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-black transition mb-3"
           >

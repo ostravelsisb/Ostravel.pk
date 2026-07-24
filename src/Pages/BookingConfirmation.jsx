@@ -58,7 +58,7 @@ const BookingConfirmation = () => {
   if (!loadedData) return null;
 
   // Use loaded data (either from route state or localStorage)
-  const { policyNo, policyData, transactionData, customerName } = loadedData;
+  const { policyNo, policyData, transactionData, customerName, customerCnic, customerPhone } = loadedData;
 
   // 3. ROBUST VALUE MAPPING (Fixes the "PKR 0" issue)
   // UIC API Response: { PolicyNo, TravelerName, Amount, AdvanceTax, TravelerEmail, PolicyPrintUrl }
@@ -89,8 +89,12 @@ const BookingConfirmation = () => {
 
   const formattedTotal = totalValue.toLocaleString();
 
-  // Extract Cnic
-  const cnic = policyData?.Cnic || policyData?.CNIC || policyData?.cnic || "N/A";
+  // Extract Cnic — prefer what the customer actually submitted, since UIC's
+  // response doesn't echo it back
+  const cnic = customerCnic || policyData?.Cnic || policyData?.CNIC || policyData?.cnic || "N/A";
+
+  // Extract Phone — same reasoning as cnic above
+  const phone = customerPhone || policyData?.PhoneNo || policyData?.Phone || policyData?.ContactNo || "N/A";
 
   // Extract certificate URL - UIC returns "PolicyPrintUrl"
   const certificateUrl = policyData?.PolicyPrintUrl || policyData?.certificateUrl || policyData?.pdfLink;
@@ -107,7 +111,7 @@ const BookingConfirmation = () => {
         // 1. Core Identification
         uid: currentUser?.uid || "guest",
         policyNumber: policyNo,
-        status: "ISSUED",
+        status: "PAID",
         purchaseDate: serverTimestamp(),
         source: "web_app",
 
@@ -120,6 +124,7 @@ const BookingConfirmation = () => {
         travelerName: travelerName,
         userEmail: travelerEmail,
         cnic: cnic, // Explicitly saved for search
+        phone: phone,
         bankTransactionId: transactionData?.unique_tran_id || "N/A",
         paidAt: transactionData?.paid_datetime || new Date().toISOString(),
 

@@ -22,7 +22,7 @@ const formatTime = (ts) => {
     return d.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" });
 };
 
-export default function LiveChatPanel({ adminName }) {
+export default function LiveChatPanel({ adminName, preselectChatId, onPreselectHandled }) {
     const [chats, setChats] = useState([]);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState(null);
@@ -35,6 +35,17 @@ export default function LiveChatPanel({ adminName }) {
         const unsub = listenToAllChats(setChats);
         return () => unsub && unsub();
     }, []);
+
+    // Auto-open a specific conversation when arriving here from a
+    // notification click (e.g. the bell dropdown). Waits for `chats` to be
+    // loaded so the thread listener below has something to attach to, then
+    // tells the parent it's been handled so it doesn't re-trigger.
+    useEffect(() => {
+        if (!preselectChatId) return;
+        if (!chats.some(c => c.id === preselectChatId)) return;
+        setSelectedId(preselectChatId);
+        onPreselectHandled?.();
+    }, [preselectChatId, chats, onPreselectHandled]);
 
     useEffect(() => {
         if (!selectedId) return;

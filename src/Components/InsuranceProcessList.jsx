@@ -32,8 +32,23 @@ export default function InsuranceProcessList({ policies = [] }) {
     const [detailRecord, setDetailRecord] = useState(null);
 
     const rows = useMemo(() => {
-        return policies
-            .map(r => ({ raw: r, n: normalize(r) }))
+        // Same purchase can land in both `insurancesCustumer` and `policies`
+        // (BookingConfirmation.jsx and PaymentReturn.jsx each write their own
+        // record for the same order). Dedupe by policyNumber so it isn't
+        // shown twice — keep the first occurrence, which is the
+        // `insurancesCustumer` copy since that array is spread first by the
+        // caller.
+        const seen = new Set();
+        const deduped = [];
+        for (const r of policies) {
+            const n = normalize(r);
+            const key = n.policyNumber || n.transactionId || r.id;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push({ raw: r, n });
+        }
+
+        return deduped
             .filter(({ n }) => {
                 if (!search.trim()) return true;
                 const q = search.toLowerCase();

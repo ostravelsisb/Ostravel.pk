@@ -4,7 +4,13 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Context/AuthContext";
-import { FaCheckCircle, FaCalendarAlt, FaHotel, FaCar, FaUser, FaEnvelope, FaPhone, FaIdCard, FaPassport } from "react-icons/fa";
+import { FaCheckCircle, FaCalendarAlt, FaHotel, FaCar, FaUser, FaEnvelope, FaPhone, FaIdCard, FaPassport, FaWhatsapp } from "react-icons/fa";
+import { sendInquiryEmail } from "../Utils/emailService";
+import EmailSentPopup from "../Components/EmailSentPopup";
+
+// Officer who receives Umrah WhatsApp inquiries.
+// TODO: replace with the real Hajj & Umrah desk number if different.
+const UMRAH_WHATSAPP_NUMBER = "923325500377";
 
 export default function UmrahBookingForm() {
     const navigate = useNavigate();
@@ -42,6 +48,10 @@ export default function UmrahBookingForm() {
     const [loading, setLoading] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
+
+    // WhatsApp / Email quick-inquiry buttons (below "Start Booking / Get Quote")
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [emailPopup, setEmailPopup] = useState({ show: false, success: true });
 
     // --- Auto-Calculate Nights ---
     useEffect(() => {
@@ -155,8 +165,66 @@ export default function UmrahBookingForm() {
         }
     };
 
+    // Shared minimal validation for the quick WhatsApp/Email buttons — the
+    // full form's own Name/Contact requirement, mirrored here.
+    const validateQuickInquiry = () => {
+        if (!formData.user.name || !formData.user.contact) {
+            setErrorMsg("Please provide your Name and Contact Number.");
+            return false;
+        }
+        setErrorMsg("");
+        return true;
+    };
+
+    const buildInquiryDetails = () => ({
+        "Services": Object.entries(formData.services).filter(([, v]) => v).map(([k]) => k).join(", ") || "None selected",
+        "Check In": formData.makkah.checkIn || "Flexible",
+        "Check Out": formData.makkah.checkOut || "Flexible",
+        "Hotel": formData.makkah.hotel,
+        "Rooms": formData.makkah.rooms,
+        "Nights": formData.makkah.nights,
+        "Vehicle Type": formData.transport.vehicleType,
+        "Travelers": formData.user.travelers,
+    });
+
+    const handleWhatsAppInquiry = () => {
+        if (!validateQuickInquiry()) return;
+        const d = buildInquiryDetails();
+        const lines = [
+            "🕋 *Umrah Booking Inquiry*",
+            "",
+            `*Name:* ${formData.user.name}`,
+            `*Contact:* ${formData.user.contact}`,
+            ...Object.entries(d).map(([label, value]) => `*${label}:* ${value}`),
+        ];
+        if (formData.user.notes) lines.push("", `*Notes:* ${formData.user.notes}`);
+        lines.push("", "Hi, I'd like to get a quote for the Umrah package above. Please share available options and pricing. Thank you!");
+        const url = `https://wa.me/${UMRAH_WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join("\n"))}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+    };
+
+    const handleEmailInquiry = async () => {
+        if (!validateQuickInquiry()) return;
+        setIsSendingEmail(true);
+        const { ok } = await sendInquiryEmail({
+            type: "Umrah",
+            name: formData.user.name,
+            email: formData.user.email,
+            phone: formData.user.contact,
+            details: buildInquiryDetails(),
+            message: formData.user.notes || undefined,
+        });
+        setIsSendingEmail(false);
+        setEmailPopup({ show: true, success: ok });
+    };
+
     return (
         <div className="w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+            <EmailSentPopup
+                show={emailPopup.show}
+                success={emailPopup.success}
+                onClose={() => setEmailPopup((p) => ({ ...p, show: false }))}
+            />
             <div className="bg-blue-600 p-6 text-white text-center">
                 <h2 className="text-2xl font-bold">Build Your Custom Package</h2>
                 <p className="opacity-90 text-sm">Select your preferences and get a quote</p>
@@ -435,6 +503,28 @@ export default function UmrahBookingForm() {
                 >
                     {loading ? "Submitting Request..." : "Start Booking / Get Quote"}
                 </button>
+
+                {/* Quick inquiry — sends the same details straight to WhatsApp or
+                    email, without requiring login or saving to the dashboard. */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                        type="button"
+                        onClick={handleWhatsAppInquiry}
+                        className="flex-1 min-w-0 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl px-4 py-3.5 transition-colors flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 text-center leading-tight"
+                    >
+                        <FaWhatsapp className="text-xl shrink-0" />
+                        <span className="text-sm sm:text-base">Send Inquiry on WhatsApp</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleEmailInquiry}
+                        disabled={isSendingEmail}
+                        className="flex-1 min-w-0 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl px-4 py-3.5 transition-colors flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 text-center leading-tight"
+                    >
+                        <FaEnvelope className="text-lg shrink-0" />
+                        <span className="text-sm sm:text-base">{isSendingEmail ? "Sending..." : "Send Inquiry by Email"}</span>
+                    </button>
+                </div>
 
                 <p className="text-center text-xs text-slate-400">
                     Our Hajj & Umrah team will review your request and send a quote with a secure payment link to your dashboard.

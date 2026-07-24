@@ -34,7 +34,8 @@ import SubAdminManagement from "../Components/SubAdminManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import LiveChatPanel from "../Components/LiveChatPanel";
-import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter, hasUnseenUserMessage, markUserMessageSeen } from "../Utils/ApplicationEditUtils";
+import { listenToAllChats } from "../Utils/liveChatUtils";
+import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter, hasUnseenUserMessage, markUserMessageSeen, clearUserConfirmation } from "../Utils/ApplicationEditUtils";
 import { sendUmrahStatusEmail, sendUmrahMessageEmail, sendConsolidatedUpdateEmail } from "../Utils/emailService";
 import ToastContainer, { notify } from "../Components/Toast";
 
@@ -555,13 +556,21 @@ function UmrahQueriesTab({ inquiries, updateLocal }) {
 }
 
 // ─── MESSAGES TAB ─────────────────────────────────────────────────────────────
-function MessagesTab({ messages, adminName }) {
+function MessagesTab({ messages, adminName, preselectChatId, onPreselectHandled, liveChatsCount = 0, unreadChatsCount = 0 }) {
     const [segment, setSegment] = useState("liveChat"); // "liveChat" | "contactForm"
     const [search, setSearch] = useState("");
     const [selectedMsg, setSelectedMsg] = useState(null);
     const [page, setPage] = useState(1);
 
     useEffect(() => { setPage(1); }, [search]);
+
+    // If a chat notification was clicked from the bell dropdown, make sure
+    // we're showing the Live Chat segment so the preselected thread is visible.
+    useEffect(() => {
+        if (preselectChatId) setSegment("liveChat");
+    }, [preselectChatId]);
+
+    const unreadContactCount = useMemo(() => messages.filter(m => !m.read).length, [messages]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -597,24 +606,40 @@ function MessagesTab({ messages, adminName }) {
             {/* Segment Toggle */}
             <motion.div variants={fadeUp} className="inline-flex bg-white rounded-2xl border border-gray-200 shadow-sm p-1.5 gap-1">
                 {[
-                    { id: "liveChat", label: "Live Chat" },
-                    { id: "contactForm", label: "Contact Form" },
+                    { id: "liveChat", label: "Live Chat", total: liveChatsCount, unread: unreadChatsCount },
+                    { id: "contactForm", label: "Contact Form", total: messages.length, unread: unreadContactCount },
                 ].map((s) => (
                     <button
                         key={s.id}
                         onClick={() => setSegment(s.id)}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                        className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                             segment === s.id
                                 ? "bg-orange-500 text-white shadow-sm shadow-orange-200"
                                 : "text-gray-500 hover:bg-gray-50"
                         }`}
                     >
                         {s.label}
+                        <span className={`text-[11px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ${
+                            segment === s.id ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
+                        }`}>
+                            {s.total}
+                        </span>
+                        {s.unread > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center">
+                                {s.unread > 9 ? "9+" : s.unread}
+                            </span>
+                        )}
                     </button>
                 ))}
             </motion.div>
 
-            {segment === "liveChat" && <LiveChatPanel adminName={adminName} />}
+            {segment === "liveChat" && (
+                <LiveChatPanel
+                    adminName={adminName}
+                    preselectChatId={preselectChatId}
+                    onPreselectHandled={onPreselectHandled}
+                />
+            )}
 
             {segment === "contactForm" && (
             <>
@@ -669,7 +694,14 @@ function MessagesTab({ messages, adminName }) {
                             key={m.id}
                             variants={fadeUp}
                             layout
-                            onClick={() => setSelectedMsg(selectedMsg?.id === m.id ? null : m)}
+                            onClick={() => {
+                                const willOpen = selectedMsg?.id !== m.id;
+                                setSelectedMsg(willOpen ? m : null);
+                                if (willOpen && !m.read) {
+                                    updateDoc(doc(db, "contact_messages", m.id), { read: true })
+                                        .catch(e => console.error("mark message read error:", e));
+                                }
+                            }}
                             whileHover={{ x: 2 }}
                             whileTap={{ scale: 0.98 }}
                             className={`w-full text-left rounded-2xl border p-4 transition-all shadow-sm ${selectedMsg?.id === m.id
@@ -798,6 +830,10 @@ export default function AdminDashboard() {
     const [gatewayPolicies, setGatewayPolicies] = useState([]);
     const [messages, setMessages] = useState([]);
     const [inquiries, setInquiries] = useState([]);
+    const [liveChats, setLiveChats] = useState([]);
+    // Set when a chat notification is clicked from the bell dropdown — tells
+    // MessagesTab/LiveChatPanel which conversation to auto-open.
+    const [preselectChatId, setPreselectChatId] = useState(null);
     const [loading, setLoading] = useState(true);
 
     // Helpers to read amount/date across both collections (different field names).
@@ -806,6 +842,23 @@ export default function AdminDashboard() {
         || r?.orderDate?.toDate?.() || r?.orderDate
         || r?.createdAt?.toDate?.() || r?.createdAt
         || null;
+    // `policies` (insurancesCustumer) and `gatewayPolicies` (policies collection)
+    // each write their own record for the same purchase (BookingConfirmation.jsx
+    // and PaymentReturn.jsx). Any KPI/chart that sums both raw double-counts
+    // real revenue, so every place that used to do [...policies, ...gatewayPolicies]
+    // should use this deduped list instead — deduped by policyNumber, keeping
+    // the `policies` (insurancesCustumer) copy.
+    const dedupedInsuranceRecords = useMemo(() => {
+        const seen = new Set();
+        const out = [];
+        for (const r of [...policies, ...gatewayPolicies]) {
+            const key = r?.policyNumber || r?.orderId || r?.id;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push(r);
+        }
+        return out;
+    }, [policies, gatewayPolicies]);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [historyVisa, setHistoryVisa] = useState(null);
     const [visaQuickFilter, setVisaQuickFilter] = useState("");
@@ -863,6 +916,17 @@ export default function AdminDashboard() {
             (e) => { console.error("insurancesCustumer onSnapshot error:", e); }
         );
 
+        // Realtime listener for live chat conversations, so a new customer
+        // message shows up in the notification bell / unread badges without
+        // needing a page refresh.
+        const liveChatsUnsub = onSnapshot(
+            collection(db, "liveChats"),
+            (snap) => {
+                setLiveChats(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            },
+            (e) => { console.error("liveChats onSnapshot error:", e); }
+        );
+
         // Realtime listener for payment-gateway transactions (PaymentReturn flow).
         // This collection was NEVER being read by the dashboard — the second
         // half of why total revenue stayed frozen.
@@ -882,14 +946,18 @@ export default function AdminDashboard() {
             (e) => console.error("umrahApplications onSnapshot error:", e)
         );
 
-        // Non-revenue collections — one-time fetch is fine, they don't drive KPIs.
+        // Realtime listener for contact-form messages, so a new submission
+        // shows up in the badge/list instantly without a page refresh.
+        const messagesUnsub = onSnapshot(
+            query(collection(db, "contact_messages"), orderBy("createdAt", "desc")),
+            (snap) => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+            (e) => console.error("contact_messages onSnapshot error:", e)
+        );
+
+        // Non-revenue collection — one-time fetch is fine, doesn't drive KPIs/badges.
         const fetchRest = async () => {
             try {
-                const [m, i] = await Promise.all([
-                    getDocs(query(collection(db, "contact_messages"), orderBy("createdAt", "desc"))),
-                    getDocs(query(collection(db, "umardet"), orderBy("createdAt", "desc")))
-                ]);
-                setMessages(m.docs.map(d => ({ id: d.id, ...d.data() })));
+                const i = await getDocs(query(collection(db, "umardet"), orderBy("createdAt", "desc")));
                 setInquiries(i.docs.map(d => ({ id: d.id, ...d.data() })));
             } catch (e) { console.error(e); }
         };
@@ -900,6 +968,8 @@ export default function AdminDashboard() {
             insuranceUnsub();
             gatewayUnsub();
             umrahUnsub();
+            liveChatsUnsub();
+            messagesUnsub();
         };
     }, []);
 
@@ -1014,8 +1084,9 @@ export default function AdminDashboard() {
         // verifyPayment(). Must be applied here too, not just to `visas`, or this KPI
         // won't match the (correctly filtered) Revenue Details page.
         const isRealPayment = (r) => !String(r?.orderId || "").startsWith("VISA-TEST-");
-        const insuranceRevenue = policies.filter(isRealPayment).reduce((a, b) => a + getPolicyAmount(b), 0);
-        const gatewayRevenue = gatewayPolicies.filter(isRealPayment).reduce((a, b) => a + getPolicyAmount(b), 0);
+        const totalInsuranceRevenue = dedupedInsuranceRecords
+            .filter(isRealPayment)
+            .reduce((a, b) => a + getPolicyAmount(b), 0);
         const visaRevenue = visas
             .filter(isRealPayment)
             .reduce((a, b) => a + (Number(b?.amountPaid) || 0), 0);
@@ -1026,7 +1097,6 @@ export default function AdminDashboard() {
             .filter(isRealPayment)
             .filter(u => u.paymentStatus === "Paid" || u.status === "Paid")
             .reduce((a, b) => a + (Number(b?.amountPaid) || 0), 0);
-        const totalInsuranceRevenue = insuranceRevenue + gatewayRevenue;
         return {
             revenue: totalInsuranceRevenue + visaRevenue + umrahRevenue,
             insuranceRevenue: totalInsuranceRevenue,
@@ -1036,7 +1106,7 @@ export default function AdminDashboard() {
             approved: visas.filter(v => v.status === "Approve").length,
             rejected: visas.filter(v => v.status === "Reject").length,
         };
-    }, [visas, policies, gatewayPolicies, umrahRequests]);
+    }, [visas, dedupedInsuranceRecords, umrahRequests]);
 
     const parseDate = (d) => {
         if (!d) return null;
@@ -1090,7 +1160,7 @@ export default function AdminDashboard() {
                 const d = parseDate(v.applicationDate);
                 if (d && d >= cutoff && d <= endDt) totals[d.getMonth()].applications += 1;
             });
-            [...policies, ...gatewayPolicies].forEach(p => addRevenueFor(totals[getPolicyDate(p)?.getMonth() ?? -1] || totals[0], p));
+            dedupedInsuranceRecords.forEach(p => addRevenueFor(totals[getPolicyDate(p)?.getMonth() ?? -1] || totals[0], p));
             // For "Last Year" only show that year's months; for "This Year" trim future months
             if (salesPeriod === "This Year") {
                 const currentMonth = new Date().getMonth();
@@ -1104,25 +1174,25 @@ export default function AdminDashboard() {
                 const d = parseDate(v.applicationDate);
                 if (d && d >= cutoff && d <= endDt) totals[d.getDay()].applications += 1;
             });
-            [...policies, ...gatewayPolicies].forEach(p => {
+            dedupedInsuranceRecords.forEach(p => {
                 const d = getPolicyDate(p);
                 if (d && d >= cutoff && d <= endDt) totals[d.getDay()].revenue += getPolicyAmount(p) / 1000;
             });
             return totals;
         }
-    }, [visas, policies, gatewayPolicies, salesPeriod]);
+    }, [visas, dedupedInsuranceRecords, salesPeriod]);
 
     // Keep weeklyOverview for backward compat with other usages
     const weeklyOverview = useMemo(() => {
         const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         const totals = days.map(d => ({ day: d, applications: 0, revenue: 0 }));
         visas.forEach(v => { const d = parseDate(v.applicationDate); if (d) totals[d.getDay()].applications += 1; });
-        [...policies, ...gatewayPolicies].forEach(p => {
+        dedupedInsuranceRecords.forEach(p => {
             const d = getPolicyDate(p);
             if (d) totals[d.getDay()].revenue += getPolicyAmount(p) / 1000;
         });
         return totals;
-    }, [visas, policies, gatewayPolicies]);
+    }, [visas, dedupedInsuranceRecords]);
 
     const donutData = useMemo(() => {
         const now = new Date();
@@ -1169,6 +1239,11 @@ export default function AdminDashboard() {
     ];
 
     const pageTitle = activeTab === "overview" ? "Dashboard" : navItems.find(n => n.id === activeTab)?.label || activeTab;
+    // Chats with a new customer message waiting on the admin side.
+    const unreadChats = useMemo(() => liveChats.filter(c => c.adminUnread), [liveChats]);
+    const unreadContactMessages = useMemo(() => messages.filter(m => !m.read).length, [messages]);
+    const totalMessagesBadge = unreadChats.length + unreadContactMessages;
+
     const visaCountries = useMemo(() => {
         const set = new Set(visas.map(v => v.country).filter(Boolean));
         return set.size;
@@ -1228,8 +1303,19 @@ export default function AdminDashboard() {
                                             className="absolute left-0 top-1 bottom-1 w-1 rounded-full bg-orange-500"
                                             transition={{ type: "spring", stiffness: 400, damping: 30 }} />
                                     )}
-                                    <span className={`text-lg shrink-0 ${isActive ? "text-orange-500" : "text-gray-400 group-hover:text-gray-600"}`}>{item.icon}</span>
-                                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                                    <span className={`text-lg shrink-0 ${isActive ? "text-orange-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                                        {item.icon}
+                                    </span>
+                                    {!sidebarCollapsed && (
+                                        <span className="truncate flex-1 flex items-center justify-between gap-2">
+                                            {item.label}
+                                            {item.id === "messages" && totalMessagesBadge > 0 && (
+                                                <span className="bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shrink-0">
+                                                    {totalMessagesBadge > 99 ? "99+" : totalMessagesBadge}
+                                                </span>
+                                            )}
+                                        </span>
+                                    )}
                                 </motion.button>
                             );
                         })}
@@ -1268,10 +1354,10 @@ export default function AdminDashboard() {
                                 onClick={() => { setShowNotifDropdown(p => !p); setShowProfileDropdown(false); }}
                                 className="relative w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-colors">
                                 <MdNotificationsNone className="text-2xl" />
-                                {visas.filter(v => v.userConfirmed).length > 0 && (
+                                {(visas.filter(v => v.userConfirmed).length + unreadChats.length) > 0 && (
                                     <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, delay: 0.3 }}
                                         className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                                        {visas.filter(v => v.userConfirmed).length > 9 ? "9+" : visas.filter(v => v.userConfirmed).length}
+                                        {(visas.filter(v => v.userConfirmed).length + unreadChats.length) > 9 ? "9+" : (visas.filter(v => v.userConfirmed).length + unreadChats.length)}
                                     </motion.span>
                                 )}
                             </motion.button>
@@ -1282,26 +1368,51 @@ export default function AdminDashboard() {
                                         className="absolute right-0 top-11 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden">
                                         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                                             <h4 className="text-base font-bold text-gray-800">Notifications</h4>
-                                            <span className="text-[12px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">{visas.filter(v => v.userConfirmed).length} New</span>
+                                            <span className="text-[12px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">{visas.filter(v => v.userConfirmed).length + unreadChats.length} New</span>
                                         </div>
                                         <div className="max-h-80 overflow-y-auto">
-                                            {visas.filter(v => v.userConfirmed).length === 0 ? (
+                                            {(visas.filter(v => v.userConfirmed).length + unreadChats.length) === 0 ? (
                                                 <div className="p-6 text-center">
                                                     <MdNotificationsNone className="text-gray-200 text-4xl mx-auto mb-2" />
                                                     <p className="text-sm text-gray-400 font-bold">No new notifications</p>
                                                 </div>
-                                            ) : visas.filter(v => v.userConfirmed).slice(0, 8).map(v => (
-                                                <button key={v.id} onClick={() => { setSelectedDoc(v); setShowNotifDropdown(false); }}
-                                                    className="w-full text-left px-4 py-3 hover:bg-orange-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0"><FaPassport className="text-orange-500 text-sm" /></div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-bold text-gray-800 truncate">{v.applicantName || "Applicant"}</p>
-                                                        <p className="text-[12px] text-gray-400 truncate">{v.country} • Re-submitted for review</p>
-                                                    </div>
-                                                </button>
-                                            ))}
+                                            ) : (
+                                                <>
+                                                    {unreadChats.slice(0, 5).map(c => (
+                                                        <button key={`chat-${c.id}`} onClick={() => {
+                                                            setActiveTab("messages");
+                                                            setPreselectChatId(c.id);
+                                                            setShowNotifDropdown(false);
+                                                        }}
+                                                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><MdMessage className="text-blue-500 text-sm" /></div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-bold text-gray-800 truncate">{c.userName || "User"}</p>
+                                                                <p className="text-[12px] text-gray-400 truncate">
+                                                                    {(c.messages && c.messages.length) ? c.messages[c.messages.length - 1].text : "New message"}
+                                                                </p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                    {visas.filter(v => v.userConfirmed).slice(0, 8).map(v => (
+                                                        <button key={v.id} onClick={() => {
+                                                            setSelectedDoc(v);
+                                                            setShowNotifDropdown(false);
+                                                            updateLocal('visa', v.id, { userConfirmed: false });
+                                                            clearUserConfirmation(v.id, 'visaApplications').catch(e => console.error("clearUserConfirmation error:", e));
+                                                        }}
+                                                            className="w-full text-left px-4 py-3 hover:bg-orange-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0"><FaPassport className="text-orange-500 text-sm" /></div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-bold text-gray-800 truncate">{v.applicantName || "Applicant"}</p>
+                                                                <p className="text-[12px] text-gray-400 truncate">{v.country} • Re-submitted for review</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </>
+                                            )}
                                         </div>
-                                        {visas.filter(v => v.userConfirmed).length > 0 && (
+                                        {(visas.filter(v => v.userConfirmed).length + unreadChats.length) > 0 && (
                                             <button onClick={() => { setActiveTab("visas"); setShowNotifDropdown(false); }}
                                                 className="w-full text-center text-sm font-bold text-orange-500 py-2.5 border-t border-gray-100 hover:bg-orange-50 transition-colors">
                                                 View All Applications
@@ -1632,7 +1743,14 @@ export default function AdminDashboard() {
 
                     {/* ════ MESSAGES TAB ════ */}
                     {activeTab === "messages" && (
-                        <MessagesTab messages={filteredMessages} adminName={currentUser?.email} />
+                        <MessagesTab
+                            messages={filteredMessages}
+                            adminName={currentUser?.email}
+                            preselectChatId={preselectChatId}
+                            onPreselectHandled={() => setPreselectChatId(null)}
+                            liveChatsCount={liveChats.length}
+                            unreadChatsCount={unreadChats.length}
+                        />
                     )}
 
                     {/* ════ SUB-ADMINS TAB ════ */}

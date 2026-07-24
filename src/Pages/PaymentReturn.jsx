@@ -360,12 +360,18 @@ export default function PaymentReturn() {
       });
 
       // STEP 5: Store policy data in localStorage for persistence
+      // NOTE: UIC's create-policy response doesn't echo back CNIC/phone, so
+      // pull those from what the customer actually submitted (parsedPolicyData
+      // — NICNo/PhoneNo) rather than relying on the API response, or
+      // BookingConfirmation.jsx ends up saving "N/A" for both.
       const completePolicyData = {
         orderId: orderId,
         policyNo: policyCreation.data.policyNumber,
         policyData: policyCreation.data,
         transactionData: paymentVerification.data,
         customerName: parsedCustomerInfo.name,
+        customerCnic: parsedPolicyData.NICNo || null,
+        customerPhone: parsedPolicyData.PhoneNo || parsedCustomerInfo.mobile || null,
         timestamp: new Date().toISOString()
       };
 

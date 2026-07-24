@@ -179,6 +179,7 @@
   },
   "active": "2d805c49af368507",
   "lastOpenFiles": [
+    "src/Components/EmailSentPopup.jsx",
     "subadmin_damage.diff",
     "SubAdminPanel_original.jsx",
     "src/Components/InsuranceProcessList.jsx",
@@ -190,7 +191,6 @@
     "node_modules/@rollup/rollup-linux-arm-musleabihf",
     "node_modules/@rollup/rollup-linux-arm-gnueabihf",
     "node_modules/@rollup/rollup-freebsd-x64",
-    "node_modules/@rollup/rollup-freebsd-arm64",
     "node_modules/dotenv/skills/dotenvx/SKILL.md",
     "node_modules/dotenv/skills/dotenv/SKILL.md",
     "node_modules/basic-auth/node_modules/safe-buffer/README.md",

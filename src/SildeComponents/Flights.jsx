@@ -9,7 +9,9 @@ import {
   MdAirlineSeatReclineNormal,
 } from "react-icons/md";
 import { HiPlus, HiMinus, HiChevronDown, HiXMark, HiChevronRight } from "react-icons/hi2";
-import { FaWhatsapp } from "react-icons/fa";
+import { FaWhatsapp, FaEnvelope, FaUser, FaPhone } from "react-icons/fa";
+import { sendInquiryEmail } from "../Utils/emailService";
+import EmailSentPopup from "../Components/EmailSentPopup";
 
 
 // --- Passenger Counter Component ---
@@ -361,6 +363,11 @@ function Flights() {
   const [departureDate, setDepartureDate] = useState("");
   const [returnDate, setReturnDate] = useState("");
 
+  // Contact details (required so we know who to get back to)
+  const [travelerName, setTravelerName] = useState("");
+  const [travelerEmail, setTravelerEmail] = useState("");
+  const [travelerPhone, setTravelerPhone] = useState("");
+
   // State for passenger dropdown
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0); // Ages 2-11
@@ -371,6 +378,11 @@ function Flights() {
   // Controls the "Choose your travel expert" WhatsApp picker modal, shown
   // after the form validates and before the WhatsApp chat actually opens.
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
+
+  // Email button state — sends the same inquiry details straight to
+  // ostravelsisb@gmail.com instead of opening WhatsApp.
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailPopup, setEmailPopup] = useState({ show: false, success: true });
 
   const passengerRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -426,23 +438,40 @@ function Flights() {
       `*Passengers:* ${adults} Adult${adults > 1 ? "s" : ""}${children ? `, ${children} Child${children > 1 ? "ren" : ""}` : ""}${infants ? `, ${infants} Infant${infants > 1 ? "s" : ""}` : ""}`,
       `*Cabin Class:* ${cabinClass}`,
       "",
+      `*Name:* ${travelerName.trim()}`,
+      `*Phone:* ${travelerPhone.trim()}`,
+    );
+    if (travelerEmail.trim()) lines.push(`*Email:* ${travelerEmail.trim()}`);
+
+    lines.push(
+      "",
       "Hi, I'd like to get a quote for the flight details above. Please share available options and pricing. Thank you!"
     );
 
     return lines.join("\n");
   };
 
-  // Validates the form, then opens the "Choose your travel expert" modal
-  // instead of jumping straight to WhatsApp.
-  const handleSearchFlights = () => {
+  // Shared validation for both the WhatsApp and Email buttons.
+  const validateInquiry = () => {
     if (!fromCity.trim() || !toCity.trim()) {
       alert("Please enter both a departure and destination city/airport.");
-      return;
+      return false;
     }
     if (!departureDate) {
       alert("Please select a departure date.");
-      return;
+      return false;
     }
+    if (!travelerName.trim() || !travelerPhone.trim()) {
+      alert("Please provide your name and phone number.");
+      return false;
+    }
+    return true;
+  };
+
+  // Validates the form, then opens the "Choose your travel expert" modal
+  // instead of jumping straight to WhatsApp.
+  const handleSearchFlights = () => {
+    if (!validateInquiry()) return;
     setIsInquiryModalOpen(true);
   };
 
@@ -455,8 +484,39 @@ function Flights() {
     setIsInquiryModalOpen(false);
   };
 
+  // Fired by the "Email" button — validates the same way WhatsApp does,
+  // then emails the inquiry to ostravelsisb@gmail.com and shows a
+  // confirmation popup.
+  const handleSendEmailInquiry = async () => {
+    if (!validateInquiry()) return;
+
+    setIsSendingEmail(true);
+    const { ok } = await sendInquiryEmail({
+      type: "Flight",
+      name: travelerName.trim(),
+      email: travelerEmail.trim(),
+      phone: travelerPhone.trim(),
+      details: {
+        "Trip Type": flightType,
+        "From": fromCity.trim(),
+        "To": toCity.trim(),
+        "Departure Date": formatDate(departureDate),
+        ...(flightType === "Round-trip" ? { "Return Date": formatDate(returnDate) } : {}),
+        "Passengers": `${adults} Adult${adults > 1 ? "s" : ""}${children ? `, ${children} Child${children > 1 ? "ren" : ""}` : ""}${infants ? `, ${infants} Infant${infants > 1 ? "s" : ""}` : ""}`,
+        "Cabin Class": cabinClass,
+      },
+    });
+    setIsSendingEmail(false);
+    setEmailPopup({ show: true, success: ok });
+  };
+
   return (
     <div>
+      <EmailSentPopup
+        show={emailPopup.show}
+        success={emailPopup.success}
+        onClose={() => setEmailPopup((p) => ({ ...p, show: false }))}
+      />
       {/* 1. Flight Type Tabs */}
       <div className="flex items-center gap-2 mb-4">
         <button
@@ -638,16 +698,80 @@ function Flights() {
             </div>
           )}
         </div>
+
+        {/* Contact Details */}
+        <div>
+          <label htmlFor="travelerName" className="block text-sm font-medium text-gray-700 mb-1">
+            Your Name <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <FaUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              id="travelerName"
+              placeholder="e.g. Ali Khan"
+              value={travelerName}
+              onChange={(e) => setTravelerName(e.target.value)}
+              required
+              className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="travelerPhone" className="block text-sm font-medium text-gray-700 mb-1">
+            Phone Number <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="tel"
+              id="travelerPhone"
+              placeholder="e.g. 0336 5555666"
+              value={travelerPhone}
+              onChange={(e) => setTravelerPhone(e.target.value)}
+              required
+              className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="md:col-span-2">
+          <label htmlFor="travelerEmail" className="block text-sm font-medium text-gray-700 mb-1">
+            Email
+          </label>
+          <div className="relative">
+            <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="email"
+              id="travelerEmail"
+              placeholder="e.g. ali@example.com"
+              value={travelerEmail}
+              onChange={(e) => setTravelerEmail(e.target.value)}
+              className="w-full h-14 pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
       </div>
 
-      {/* 3. Submit Button */}
-      <div className="mt-8">
+      {/* 3. Submit Buttons */}
+      <div className="mt-8 flex flex-col sm:flex-row gap-3">
         <button
           type="button"
           onClick={handleSearchFlights}
-          className="w-full bg-green-500 hover:bg-green-600 text-white font-bold text-lg rounded-lg px-16 py-3 transition-colors flex items-center justify-center gap-2"
+          className="flex-1 min-w-0 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg px-4 py-3.5 transition-colors flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 text-center leading-tight"
         >
-          Send Inquiry on WhatsApp
+          <FaWhatsapp className="text-xl shrink-0" />
+          <span className="text-sm sm:text-base">Send Inquiry on WhatsApp</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleSendEmailInquiry}
+          disabled={isSendingEmail}
+          className="flex-1 min-w-0 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-lg px-4 py-3.5 transition-colors flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 text-center leading-tight"
+        >
+          <FaEnvelope className="text-lg shrink-0" />
+          <span className="text-sm sm:text-base">{isSendingEmail ? "Sending..." : "Send Inquiry by Email"}</span>
         </button>
       </div>
 

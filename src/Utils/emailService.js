@@ -6,6 +6,31 @@
 
 const EMAIL_API_BASE = "https://ostravelpkemailservice-production.up.railway.app/api/email";
 
+// ─── NEW: generic inquiry email ──────────────────────────────────────────────
+// Used by the "Email" buttons on the Flights, Hotels, and Umrah forms.
+// Always lands in ostravelsisb@gmail.com on the backend (hardcoded there),
+// this just packages up whatever the form collected.
+export const sendInquiryEmail = async ({
+    type,      // 'Flight' | 'Hotel' | 'Umrah'
+    name,
+    email,
+    phone,
+    details,   // { label: value, ... }
+    message,
+}) => {
+    try {
+        const res = await fetch(`${EMAIL_API_BASE}/inquiry`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type, name, email, phone, details, message }),
+        });
+        return { ok: res.ok };
+    } catch (err) {
+        console.error("Failed to send inquiry email:", err);
+        return { ok: false, error: err };
+    }
+};
+
 export const sendStatusChangeEmail = async ({
     to,
     applicantName,

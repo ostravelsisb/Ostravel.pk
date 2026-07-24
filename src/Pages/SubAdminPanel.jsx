@@ -24,7 +24,8 @@ import {
 import DocumentViewer from "../Components/DocumentViewer";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import LiveChatPanel from "../Components/LiveChatPanel";
-import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter, hasUnseenUserMessage, markUserMessageSeen } from "../Utils/ApplicationEditUtils";
+import { listenToAllChats } from "../Utils/liveChatUtils";
+import { toggleEditApproval, saveAdminMessage, dismissResubmissionHighlight, uploadDecisionLetter, hasUnseenUserMessage, markUserMessageSeen, clearUserConfirmation } from "../Utils/ApplicationEditUtils";
 import { sendConsolidatedUpdateEmail } from "../Utils/emailService";
 import ToastContainer, { notify } from "../Components/Toast";
 import { logStatusChange, logVisaEdit } from "../Utils/activityLogger";
@@ -375,6 +376,8 @@ export default function SubAdminPanel() {
     const [showNotifDropdown, setShowNotifDropdown] = useState(false);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
     const [visaPage, setVisaPage] = useState(1);
+    const [liveChats, setLiveChats] = useState([]);
+    const [preselectChatId, setPreselectChatId] = useState(null);
     const notifRef = React.useRef(null);
     const profileRef = React.useRef(null);
 
@@ -387,6 +390,14 @@ export default function SubAdminPanel() {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    // Live chat conversations — same collection admins see, so a sub-admin
+    // also gets notified of new customer messages in real time.
+    useEffect(() => {
+        const unsub = listenToAllChats(setLiveChats);
+        return () => unsub && unsub();
+    }, []);
+    const unreadChats = useMemo(() => liveChats.filter(c => c.adminUnread), [liveChats]);
 
     // Date Filters
     const [startDate, setStartDate] = useState('');
@@ -811,7 +822,16 @@ export default function SubAdminPanel() {
                                     <span className={`text-lg shrink-0 ${isActive ? "text-orange-500" : "text-gray-400 group-hover:text-gray-600"}`}>
                                         {item.icon}
                                     </span>
-                                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                                    {!sidebarCollapsed && (
+                                        <span className="truncate flex-1 flex items-center justify-between gap-2">
+                                            {item.label}
+                                            {item.id === "messages" && unreadChats.length > 0 && (
+                                                <span className="bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shrink-0">
+                                                    {unreadChats.length > 99 ? "99+" : unreadChats.length}
+                                                </span>
+                                            )}
+                                        </span>
+                                    )}
                                 </motion.button>
                             );
                         })}
@@ -867,14 +887,14 @@ export default function SubAdminPanel() {
                                 className="relative w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-colors"
                             >
                                 <MdNotificationsNone className="text-2xl" />
-                                {visas.filter(v => v.userConfirmed).length > 0 && (
+                                {(visas.filter(v => v.userConfirmed).length + unreadChats.length) > 0 && (
                                     <motion.span
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
                                         transition={{ type: "spring", stiffness: 500 }}
                                         className="absolute -top-1 -right-1 bg-orange-500 text-white text-[11px] font-bold w-4 h-4 rounded-full flex items-center justify-center"
                                     >
-                                        {visas.filter(v => v.userConfirmed).length > 9 ? "9+" : visas.filter(v => v.userConfirmed).length}
+                                        {(visas.filter(v => v.userConfirmed).length + unreadChats.length) > 9 ? "9+" : (visas.filter(v => v.userConfirmed).length + unreadChats.length)}
                                     </motion.span>
                                 )}
                             </motion.button>
@@ -891,22 +911,46 @@ export default function SubAdminPanel() {
                                         <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                                             <h4 className="text-base font-bold text-gray-800">Notifications</h4>
                                             <span className="text-[12px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
-                                                {visas.filter(v => v.userConfirmed).length} New
+                                                {visas.filter(v => v.userConfirmed).length + unreadChats.length} New
                                             </span>
                                         </div>
                                         <div className="max-h-80 overflow-y-auto">
-                                            {visas.filter(v => v.userConfirmed).length === 0 ? (
+                                            {(visas.filter(v => v.userConfirmed).length + unreadChats.length) === 0 ? (
                                                 <div className="p-6 text-center">
                                                     <MdNotificationsNone className="text-gray-200 text-4xl mx-auto mb-2" />
                                                     <p className="text-sm text-gray-400 font-bold">No new notifications</p>
                                                 </div>
                                             ) : (
-                                                visas.filter(v => v.userConfirmed).slice(0, 8).map(v => (
+                                                <>
+                                                    {unreadChats.slice(0, 5).map(c => (
+                                                        <button
+                                                            key={`chat-${c.id}`}
+                                                            onClick={() => {
+                                                                setActiveTab("messages");
+                                                                setPreselectChatId(c.id);
+                                                                setShowNotifDropdown(false);
+                                                            }}
+                                                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3"
+                                                        >
+                                                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                                                <MdEmail className="text-blue-500 text-sm" />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-bold text-gray-800 truncate">{c.userName || "User"}</p>
+                                                                <p className="text-[12px] text-gray-400 truncate">
+                                                                    {(c.messages && c.messages.length) ? c.messages[c.messages.length - 1].text : "New message"}
+                                                                </p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                    {visas.filter(v => v.userConfirmed).slice(0, 8).map(v => (
                                                     <button
                                                         key={v.id}
                                                         onClick={() => {
                                                             setSelectedDoc(v);
                                                             setShowNotifDropdown(false);
+                                                            updateLocal(v.id, { userConfirmed: false });
+                                                            clearUserConfirmation(v.id, 'visaApplications').catch(e => console.error("clearUserConfirmation error:", e));
                                                         }}
                                                         className="w-full text-left px-4 py-3 hover:bg-orange-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3"
                                                     >
@@ -918,7 +962,8 @@ export default function SubAdminPanel() {
                                                             <p className="text-[12px] text-gray-400 truncate">{v.country} • Re-submitted for review</p>
                                                         </div>
                                                     </button>
-                                                ))
+                                                    ))}
+                                                </>
                                             )}
                                         </div>
                                         {visas.filter(v => v.userConfirmed).length > 0 && (
@@ -1829,7 +1874,11 @@ export default function SubAdminPanel() {
                     {/* =================== MESSAGES TAB =================== */}
                     {activeTab === "messages" && (
                         <div className="space-y-5">
-                            <LiveChatPanel adminName={currentUser?.email} />
+                            <LiveChatPanel
+                                adminName={currentUser?.email}
+                                preselectChatId={preselectChatId}
+                                onPreselectHandled={() => setPreselectChatId(null)}
+                            />
                         </div>
                     )}
                 </main>

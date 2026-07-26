@@ -1,415 +1,83 @@
-// Visa data for Asian countries with multiple visa types and urgent processing options
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firbase";
 
-export const visaCountriesData = {
-    thailand: {
-        country: "Thailand",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 15000,
-                processingTime: "7-10 Working Days",
-                urgentProcessingTime: "3-5 Working Days",
-                validity: "3 Months",
-                stayDuration: "60 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 7000,
-        allowUrgent: true
-    },
+// Was: a hardcoded object with ~18 countries and a fixed PKR fee per visa
+// type. That's why editing a fee in Admin > Countries never changed
+// checkout — this file never looked at Firestore at all.
+//
+// Now: builds the exact same shape (visaCountriesData keyed by slug) from
+// the live `countries` collection, so there's one source of truth for both
+// the /visa/:country info page and the Apply Visa checkout flow.
+//
+// Fetched once per page load and cached — call ensureVisaCountriesData()
+// before using getAllCountryNames/getVisaDataByCountry/calculateTotalFee.
 
-    malaysia: {
-        country: "Malaysia",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 18000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "3 Months",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 8000,
-        allowUrgent: true
-    },
+let cache = null; // { [slug]: { country, visaTypes: [...], urgentFee, allowUrgent } }
+let inFlight = null;
 
-    singapore: {
-        country: "Singapore",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 25000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "2 Months",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 10000,
-        allowUrgent: true
-    },
+function parseFeeToNumber(feeStr) {
+  if (typeof feeStr === "number") return feeStr;
+  if (!feeStr) return 0;
+  const digits = String(feeStr).replace(/[^0-9]/g, "");
+  return digits ? Number(digits) : 0;
+}
 
-    china: {
-        country: "China",
-        visaTypes: [
-            {
-                type: "Tourist Visa (Single Entry)",
-                fee: 13200,
-                processingTime: "7-10 Working Days",
-                urgentProcessingTime: "3-5 Working Days",
-                validity: "3 Months",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            },
-            {
-                type: "Tourist Visa (Double Entry)",
-                fee: 13200,
-                processingTime: "7-10 Working Days",
-                urgentProcessingTime: "3-5 Working Days",
-                validity: "6 Months",
-                stayDuration: "30 Days per Entry",
-                category: "Double Entry"
-            }
-        ],
-        urgentFee: 8000,
-        allowUrgent: true
-    },
+function docToCountryData(doc) {
+  return {
+    country: doc.name,
+    visaTypes: (doc.visaCards || []).map((v) => ({
+      type: v.title,
+      fee: parseFeeToNumber(v.totalFee),
+      processingTime: v.processingTime || "",
+      validity: v.validity || "",
+      stayDuration: v.stay || "",
+      category: v.category || "",
+    })),
+    // Not part of the visa-info schema (no admin field for it yet) — default
+    // to no urgent option until Admin > Countries grows an "Urgent Fee" input.
+    urgentFee: doc.urgentFee || 0,
+    allowUrgent: !!doc.allowUrgent,
+  };
+}
 
-    japan: {
-        country: "Japan",
-        visaTypes: [
-            {
-                type: "Tourist Visa",
-                fee: 10,
-                processingTime: "10-15 Working Days",
-                urgentProcessingTime: "5-7 Working Days",
-                validity: "3 Months",
-                stayDuration: "15-30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 12000,
-        allowUrgent: true
-    },
+export async function ensureVisaCountriesData() {
+  if (cache) return cache;
+  if (inFlight) return inFlight;
 
-    "south-korea": {
-        country: "South Korea",
-        visaTypes: [
-            {
-                type: "Tourist Visa",
-                fee: 28000,
-                processingTime: "7-10 Working Days",
-                urgentProcessingTime: "3-5 Working Days",
-                validity: "3 Months",
-                stayDuration: "90 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 10000,
-        allowUrgent: true
-    },
+  inFlight = (async () => {
+    const snap = await getDocs(collection(db, "countries"));
+    const data = {};
+    snap.docs.forEach((d) => {
+      data[d.id] = docToCountryData(d.data());
+    });
+    cache = data;
+    inFlight = null;
+    return data;
+  })();
 
-    indonesia: {
-        country: "Indonesia",
-        visaTypes: [
-            {
-                type: "Sticker Visa",
-                fee: 35000,
-                processingTime: "7-10 Working Days",
-                urgentProcessingTime: "3-5 Working Days",
-                validity: "90 Days",
-                stayDuration: "60 Days",
-                category: "Single Entry"
-            },
-            {
-                type: "E-Visa",
-                fee: 28000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "90 Days",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 8000,
-        allowUrgent: true
-    },
+  return inFlight;
+}
 
-    philippines: {
-        country: "Philippines",
-        visaTypes: [
-            {
-                type: "Tourist Visa",
-                fee: 16000,
-                processingTime: "7-10 Working Days",
-                urgentProcessingTime: "3-5 Working Days",
-                validity: "3 Months",
-                stayDuration: "59 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 7000,
-        allowUrgent: true
-    },
+// Call this if you know data changed (e.g. after an admin edit in the same
+// session) and need fresh data instead of the cached copy.
+export function invalidateVisaCountriesCache() {
+  cache = null;
+}
 
-    vietnam: {
-        country: "Vietnam",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 14000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "90 Days",
-                stayDuration: "90 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 6000,
-        allowUrgent: true
-    },
+export const getAllCountryNames = (data) =>
+  Object.entries(data || {}).map(([key, val]) => ({ key, name: val.country }));
 
-    cambodia: {
-        country: "Cambodia",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 14000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "3 Months",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 6000,
-        allowUrgent: true
-    },
+export const getVisaDataByCountry = (data, countryKey) => (data || {})[countryKey] || null;
 
-    nepal: {
-        country: "Nepal",
-        visaTypes: [
-            {
-                type: "Tourist Visa",
-                fee: 12000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "6 Months",
-                stayDuration: "30 Days",
-                category: "Multiple Entry"
-            }
-        ],
-        urgentFee: 5000,
-        allowUrgent: true
-    },
+export const calculateTotalFee = (data, countryKey, visaTypeIndex, isUrgent) => {
+  const countryData = getVisaDataByCountry(data, countryKey);
+  if (!countryData) return 0;
 
-    "sri-lanka": {
-        country: "Sri Lanka",
-        visaTypes: [
-            {
-                type: "ETA (Electronic Travel Authorization)",
-                fee: 16000,
-                processingTime: "3-5 Working Days",
-                urgentProcessingTime: "1-2 Working Days",
-                validity: "6 Months",
-                stayDuration: "30 Days",
-                category: "Double Entry"
-            }
-        ],
-        urgentFee: 7000,
-        allowUrgent: true
-    },
+  const visaType = countryData.visaTypes[visaTypeIndex];
+  if (!visaType) return 0;
 
-    maldives: {
-        country: "Maldives",
-        visaTypes: [
-            {
-                type: "Visa on Arrival (Pre-arranged)",
-                fee: 18000,
-                processingTime: "3-5 Working Days",
-                urgentProcessingTime: "1-2 Working Days",
-                validity: "3 Months",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 8000,
-        allowUrgent: true
-    },
+  const baseFee = visaType.fee;
+  const urgentFee = isUrgent && countryData.allowUrgent ? countryData.urgentFee : 0;
 
-    uae: {
-        country: "UAE",
-        visaTypes: [
-            {
-                type: "30-Day Tourist Visa",
-                fee: 32000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "2 Months",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            },
-            {
-                type: "90-Day Tourist Visa",
-                fee: 48000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "2 Months",
-                stayDuration: "90 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 12000,
-        allowUrgent: true
-    },
-
-    qatar: {
-        country: "Qatar",
-        visaTypes: [
-            {
-                type: "Tourist Visa",
-                fee: 28000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "1 Month",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 10000,
-        allowUrgent: true
-    },
-
-    bahrain: {
-        country: "Bahrain",
-        visaTypes: [
-            {
-                type: "14-Day Visit E-Visa",
-                fee: 22000,
-                processingTime: "3-7 Working Days",
-                urgentProcessingTime: "1-2 Working Days",
-                validity: "3 Months",
-                stayDuration: "14 Days",
-                category: "Single Entry"
-            },
-            {
-                type: "1-Month Visit E-Visa",
-                fee: 35000,
-                processingTime: "3-7 Working Days",
-                urgentProcessingTime: "1-2 Working Days",
-                validity: "3 Months",
-                stayDuration: "1 Month",
-                category: "Multiple Entry"
-            },
-            {
-                type: "1-Year Visit E-Visa",
-                fee: 55000,
-                processingTime: "3-7 Working Days",
-                urgentProcessingTime: "1-2 Working Days",
-                validity: "1 Year",
-                stayDuration: "3 Months per Visit",
-                category: "Multiple Entry"
-            }
-        ],
-        urgentFee: 10000,
-        allowUrgent: true
-    },
-
-    azerbaijan: {
-        country: "Azerbaijan",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 20000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "90 Days",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 8000,
-        allowUrgent: true
-    },
-
-    kazakhstan: {
-        country: "Kazakhstan",
-        visaTypes: [
-            {
-                type: "Tourist Visa",
-                fee: 45000,
-                processingTime: "7-10 Working Days",
-                urgentProcessingTime: "3-5 Working Days",
-                validity: "3 Months",
-                stayDuration: "30 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 15000,
-        allowUrgent: true
-    },
-
-    tajikistan: {
-        country: "Tajikistan",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 18000,
-                processingTime: "5-7 Working Days",
-                urgentProcessingTime: "2-3 Working Days",
-                validity: "90 Days",
-                stayDuration: "45 Days",
-                category: "Single Entry"
-            }
-        ],
-        urgentFee: 7000,
-        allowUrgent: true
-    },
-
-    turkey: {
-        country: "Turkey",
-        visaTypes: [
-            {
-                type: "E-Visa",
-                fee: 22000,
-                processingTime: "3-5 Working Days",
-                urgentProcessingTime: "1-2 Working Days",
-                validity: "6 Months",
-                stayDuration: "90 Days",
-                category: "Multiple Entry"
-            }
-        ],
-        urgentFee: 8000,
-        allowUrgent: true
-    }
-};
-
-// Helper function to get visa data by country key
-export const getVisaDataByCountry = (countryKey) => {
-    return visaCountriesData[countryKey] || null;
-};
-
-// Helper function to get all country names for dropdown
-export const getAllCountryNames = () => {
-    return Object.values(visaCountriesData).map(data => ({
-        key: Object.keys(visaCountriesData).find(key => visaCountriesData[key] === data),
-        name: data.country
-    }));
-};
-
-// Helper function to calculate total fee
-export const calculateTotalFee = (countryKey, visaTypeIndex, isUrgent) => {
-    const countryData = getVisaDataByCountry(countryKey);
-    if (!countryData) return 0;
-
-    const visaType = countryData.visaTypes[visaTypeIndex];
-    if (!visaType) return 0;
-
-    const baseFee = visaType.fee;
-    const urgentFee = (isUrgent && countryData.allowUrgent) ? countryData.urgentFee : 0;
-
-    return baseFee + urgentFee;
+  return baseFee + urgentFee;
 };

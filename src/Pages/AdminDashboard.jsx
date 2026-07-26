@@ -12,7 +12,7 @@ import {
     MdAdminPanelSettings, MdVerifiedUser, MdShield, MdDelete, MdEdit,
     MdMoreVert, MdFilterList, MdOpenInNew, MdSave, MdAttachFile
 } from "react-icons/md";
-import { FaUserShield, FaKaaba, FaPassport, FaRegPaperPlane, FaUsersCog, FaMosque, FaBed, FaCar, FaEnvelope } from "react-icons/fa";
+import { FaUserShield, FaKaaba, FaPassport, FaRegPaperPlane, FaUsersCog, FaMosque, FaBed, FaCar, FaEnvelope, FaGlobeAmericas } from "react-icons/fa";
 import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, signOut } from "../firbase";
@@ -31,6 +31,7 @@ import VisaInterviewDocuments from "../Components/VisaInterviewDocuments";
 import InsuranceProcessList from "../Components/InsuranceProcessList";
 import VisaAnalytics from "../Components/VisaAnalytics";
 import SubAdminManagement from "../Components/SubAdminManagement";
+import CountriesManagement from "../Components/CountriesManagement";
 import SubAdminActivityLog from "../Components/SubAdminActivityLog";
 import EditHistoryModal from "../Components/EditHistoryModal";
 import LiveChatPanel from "../Components/LiveChatPanel";
@@ -819,6 +820,15 @@ function SubAdminsTab() {
     );
 }
 
+// ─── COUNTRIES TAB ────────────────────────────────────────────────────────────
+function CountriesTab() {
+    return (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+            <CountriesManagement />
+        </motion.div>
+    );
+}
+
 // ─── MAIN ADMIN DASHBOARD ─────────────────────────────────────────────────────
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState("overview");
@@ -862,6 +872,7 @@ export default function AdminDashboard() {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [historyVisa, setHistoryVisa] = useState(null);
     const [visaQuickFilter, setVisaQuickFilter] = useState("");
+    const [umrahQuickFilter, setUmrahQuickFilter] = useState("All");
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -1105,8 +1116,18 @@ export default function AdminDashboard() {
             pending: visas.filter(v => v.status === "Doc Received").length,
             approved: visas.filter(v => v.status === "Approve").length,
             rejected: visas.filter(v => v.status === "Reject").length,
+            interviews: visas.filter(v => v.status === "Interview").length,
         };
     }, [visas, dedupedInsuranceRecords, umrahRequests]);
+
+    // Umrah request counts, mirrored from the statuses used inside UmrahProcessList
+    // so the dashboard cards and the detail page always agree.
+    const umrahStats = useMemo(() => ({
+        completed: umrahRequests.filter(r => r.status === "Completed").length,
+        rejected: umrahRequests.filter(r => r.status === "Rejected").length,
+        paid: umrahRequests.filter(r => r.status === "Paid").length,
+        paymentRequested: umrahRequests.filter(r => r.status === "Payment Requested").length,
+    }), [umrahRequests]);
 
     const parseDate = (d) => {
         if (!d) return null;
@@ -1228,14 +1249,17 @@ export default function AdminDashboard() {
     }, [visas, inquiries]);
 
     const goToVisas = (statusText = "") => { setVisaQuickFilter(statusText); setActiveTab("visas"); };
+    const goToUmrah = (statusText = "All") => { setUmrahQuickFilter(statusText); setActiveTab("inquiries"); };
 
     const navItems = [
         { id: "overview", label: "Dashboard", icon: <MdDashboard /> },
         { id: "visas", label: "Visas", icon: <FaPassport /> },
         { id: "inquiries", label: "Umrah Requests", icon: <FaKaaba /> },
         { id: "insurance", label: "Insurance", icon: <FaUserShield /> },
+        { id: "analytics", label: "Analytics", icon: <MdAnalytics /> },
         { id: "messages", label: "Messages", icon: <MdMessage /> },
         { id: "subadmins", label: "Sub-Admins", icon: <FaUsersCog /> },
+        { id: "countries", label: "Countries", icon: <FaGlobeAmericas /> },
     ];
 
     const pageTitle = activeTab === "overview" ? "Dashboard" : navItems.find(n => n.id === activeTab)?.label || activeTab;
@@ -1255,6 +1279,7 @@ export default function AdminDashboard() {
             overview: "Your travel agency overview",
             inquiries: "Track Umrah package inquiries and bookings",
             insurance: "All customer insurance policy records and invoices",
+            analytics: "Sales performance and application trends",
             messages: "Customer messages and support requests",
             subadmins: "Team access control and permissions",
         }[activeTab] || "\u00A0");
@@ -1539,151 +1564,123 @@ export default function AdminDashboard() {
                                 </motion.div>
                             </motion.div>
 
-                            {/* Secondary Stats */}
-                            <motion.div className="grid grid-cols-1 md:grid-cols-3 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
-                                {[
-                                    { label: "Total Approved Visas", value: stats.approved, trend: "+35% vs Last Month", trendColor: "text-emerald-600", action: () => goToVisas("Approve"), icon: <MdOutlineContentCopy className="text-orange-500 text-2xl" />, iconBg: "bg-orange-50" },
-                                    { label: "Docs Awaiting Review", value: stats.pending, trend: "-20% vs Last Month", trendColor: "text-red-500", action: () => goToVisas("Doc Received"), icon: <MdOutlineCreditCard className="text-orange-500 text-2xl" />, iconBg: "bg-orange-50" },
-                                    { label: "Rejected Applications", value: stats.rejected, trend: "-20% vs Last Month", trendColor: "text-red-500", action: () => goToVisas("Reject"), icon: <MdReceipt className="text-amber-500 text-2xl" />, iconBg: "bg-amber-50" },
-                                ].map((c, i) => (
-                                    <motion.div key={i} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                        whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                        className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-default">
-                                        <div className="flex items-start justify-between mb-1">
-                                            <div>
-                                                <h3 className="text-4xl font-bold text-gray-800">{c.value}</h3>
-                                                <p className="text-base font-semibold text-gray-400 mt-1">{c.label}</p>
-                                            </div>
-                                            <div className={`w-11 h-11 rounded-xl ${c.iconBg} flex items-center justify-center shrink-0`}>{c.icon}</div>
-                                        </div>
-                                        <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
-                                            <span className={`text-[13px] font-bold ${c.trendColor}`}>{c.trend}</span>
-                                            <button onClick={c.action} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </motion.div>
-
-                            {/* Charts */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                                    <div className="flex items-center justify-between mb-5">
-                                        <h3 className="text-lg font-bold text-gray-800">Sales vs Purchase</h3>
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => { setShowSalesDropdown(p => !p); setShowOverallDropdown(false); }}
-                                                className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
-                                            >
-                                                {salesPeriod} <MdKeyboardArrowDown />
-                                            </button>
-                                            {showSalesDropdown && (
-                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
-                                                    {["This Year", "Last Year", "Last 3 Months", "Last 6 Months", "Last 12 Months"].map(opt => (
-                                                        <button key={opt} onClick={() => { setSalesPeriod(opt); setShowSalesDropdown(false); }}
-                                                            className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${salesPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
-                                                            {opt}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <ResponsiveContainer width="100%" height={280}>
-                                        <BarChart data={salesChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={2} barCategoryGap="25%" barSize={22}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                            <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}k`} domain={[0, 'dataMax + 10']} label={{ value: '$ (thousands)', angle: -90, position: 'insideLeft', fontSize: 9, fill: '#9ca3af' }} />
-                                            <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-                                            <Bar dataKey="applications" name="Sales" fill="#F4A183" radius={[6, 6, 0, 0]} />
-                                            <Bar dataKey="revenue" name="Purchase" fill="#E2622D" radius={[6, 6, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                    <div className="flex items-center justify-center gap-6 mt-3 text-sm font-bold text-gray-500">
-                                        <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#F4A183] inline-block"></span>Sales</span>
-                                        <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#E2622D] inline-block"></span>Purchase</span>
-                                    </div>
+                            {/* Visa Requests */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-base font-bold text-gray-700">Visa Requests</h3>
+                                    <button onClick={() => goToVisas("")} className="text-[13px] font-bold text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                                        View all <MdChevronRight />
+                                    </button>
                                 </div>
-
-                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-lg font-bold text-gray-800">Overall Information</h3>
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => { setShowOverallDropdown(p => !p); setShowSalesDropdown(false); }}
-                                                className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
-                                            >
-                                                {overallPeriod} <MdKeyboardArrowDown />
-                                            </button>
-                                            {showOverallDropdown && (
-                                                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
-                                                    {["Last 3 Months", "Last 6 Months", "Last 12 Months", "This Year"].map(opt => (
-                                                        <button key={opt} onClick={() => { setOverallPeriod(opt); setShowOverallDropdown(false); }}
-                                                            className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${overallPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
-                                                            {opt}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-400 mb-5">Applications Overview</p>
-                                    <div className="flex items-center gap-4 mb-2">
-                                        <div className="relative w-[140px] h-[140px] shrink-0">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <RadialBarChart cx="50%" cy="50%" innerRadius="55%" outerRadius="100%" barSize={10}
-                                                    data={[{ name: "Approve", value: donutData.approvedPct, fill: "#22C55E" }, { name: "Reject", value: donutData.rejectedPct, fill: "#EF4444" }]}
-                                                    startAngle={90} endAngle={-270}>
-                                                    <RadialBar background={{ fill: "#EEF1F4" }} dataKey="value" cornerRadius={20} clockWise />
-                                                </RadialBarChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                        <div className="flex-1 space-y-4">
-                                            <div>
-                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.approved}</p>
-                                                <p className="text-[13px] font-bold text-emerald-600 mt-0.5">Approved</p>
-                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">▲ {donutData.approvedPct}%</span>
+                                <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
+                                    {[
+                                        { label: "Total Approved Visas", value: stats.approved, trend: "100% Approval Rate", trendColor: "text-emerald-600", action: () => goToVisas("Approve"), icon: <MdCheckCircle className="text-emerald-500 text-2xl" />, iconBg: "bg-emerald-50" },
+                                        { label: "Rejected Applications", value: stats.rejected, trend: "Action required", trendColor: "text-red-500", action: () => goToVisas("Reject"), icon: <MdError className="text-red-500 text-2xl" />, iconBg: "bg-red-50" },
+                                        { label: "Docs Awaiting Review", value: stats.pending, trend: stats.pending ? "Needs attention" : "Queue is empty", trendColor: stats.pending ? "text-amber-600" : "text-gray-400", action: () => goToVisas("Doc Received"), icon: <MdOutlineCreditCard className="text-amber-500 text-2xl" />, iconBg: "bg-amber-50" },
+                                        { label: "Interviews", value: stats.interviews, trend: "Scheduled this week", trendColor: "text-indigo-600", action: () => goToVisas("Interview"), icon: <MdCalendarToday className="text-indigo-500 text-2xl" />, iconBg: "bg-indigo-50" },
+                                    ].map((c, i) => (
+                                        <motion.div key={i} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                            whileHover={{ y: -4, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.35, ease: "easeOut" }}
+                                            onClick={c.action}
+                                            className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-pointer">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className={`w-11 h-11 rounded-xl ${c.iconBg} flex items-center justify-center shrink-0`}>{c.icon}</div>
+                                                <p className="text-[15px] font-bold text-gray-600 leading-tight">{c.label}</p>
                                             </div>
-                                            <div>
-                                                <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.rejected}</p>
-                                                <p className="text-[13px] font-bold text-red-500 mt-0.5">Rejected</p>
-                                                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">▲ {donutData.rejectedPct}%</span>
+                                            <h3 className="text-3xl font-bold text-gray-800 mb-2">{c.value}</h3>
+                                            <div className="pt-3 border-t border-gray-100">
+                                                <span className={`text-[12px] font-bold ${c.trendColor}`}>{c.trend}</span>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-3 mt-auto pt-6 border-t border-gray-100 text-center">
-                                        <div className="border-r border-gray-100"><p className="text-3xl font-bold text-gray-800">{visas.length}</p><p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Visas</p></div>
-                                        <div className="border-r border-gray-100"><p className="text-3xl font-bold text-gray-800">{inquiries.length}</p><p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Umrah</p></div>
-                                        <div><p className="text-3xl font-bold text-gray-800">{messages.length}</p><p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Msgs</p></div>
-                                    </div>
-                                </div>
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
                             </div>
 
-                            {/* Recent Activity */}
+                            {/* Umrah Requests */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-base font-bold text-gray-700">Umrah Requests</h3>
+                                    <button onClick={() => goToUmrah("All")} className="text-[13px] font-bold text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                                        View all <MdChevronRight />
+                                    </button>
+                                </div>
+                                <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } } }}>
+                                    {[
+                                        { label: "Completed", value: umrahStats.completed, trend: "Successfully processed", trendColor: "text-emerald-600", action: () => goToUmrah("Completed"), icon: <MdCheckCircle className="text-emerald-500 text-2xl" />, iconBg: "bg-emerald-50" },
+                                        { label: "Rejected", value: umrahStats.rejected, trend: umrahStats.rejected ? "Requires attention" : "None rejected", trendColor: "text-red-500", action: () => goToUmrah("Rejected"), icon: <MdError className="text-red-500 text-2xl" />, iconBg: "bg-red-50" },
+                                        { label: "Paid", value: umrahStats.paid, trend: "Transaction confirmed", trendColor: "text-blue-600", action: () => goToUmrah("Paid"), icon: <MdOutlineCreditCard className="text-blue-500 text-2xl" />, iconBg: "bg-blue-50" },
+                                        { label: "Payment Requested", value: umrahStats.paymentRequested, trend: umrahStats.paymentRequested ? "Awaiting customer action" : "All settled", trendColor: "text-amber-600", action: () => goToUmrah("Payment Requested"), icon: <MdDescription className="text-amber-500 text-2xl" />, iconBg: "bg-amber-50" },
+                                    ].map((c, i) => (
+                                        <motion.div key={i} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                                            whileHover={{ y: -4, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.35, ease: "easeOut" }}
+                                            onClick={c.action}
+                                            className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-pointer">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className={`w-11 h-11 rounded-xl ${c.iconBg} flex items-center justify-center shrink-0`}>{c.icon}</div>
+                                                <p className="text-[15px] font-bold text-gray-600 leading-tight">{c.label}</p>
+                                            </div>
+                                            <h3 className="text-3xl font-bold text-gray-800 mb-2">{c.value}</h3>
+                                            <div className="pt-3 border-t border-gray-100">
+                                                <span className={`text-[12px] font-bold ${c.trendColor}`}>{c.trend}</span>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
+                            </div>
+
+                            {/* Recent Submissions */}
                             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                                 <div className="flex items-center justify-between mb-5">
-                                    <h3 className="text-lg font-bold text-gray-800">Recent Activity</h3>
-                                    <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">Weekly</span>
+                                    <h3 className="text-lg font-bold text-gray-800">Recent Submissions</h3>
+                                    <button onClick={() => goToVisas("")} className="text-[13px] font-bold text-orange-500 hover:text-orange-600">View All Applications</button>
                                 </div>
                                 {recentActivity.length === 0 ? (
                                     <p className="text-base text-gray-400 font-bold text-center py-8">No recent activity</p>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                                        {recentActivity.map(a => (
-                                            <motion.button key={a.type + a.id} whileHover={{ x: 2 }} whileTap={{ scale: 0.98 }}
-                                                onClick={() => { if (a.type === "visa") { const v = visas.find(x => x.id === a.id); if (v) setSelectedDoc(v); } else setActiveTab("inquiries"); }}
-                                                className="flex items-center gap-3 py-1 text-left w-full rounded-lg hover:bg-gray-50 transition-colors px-1 -mx-1">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${a.type === "visa" ? "bg-orange-50 text-orange-500" : "bg-emerald-50 text-emerald-600"}`}>
-                                                    {a.type === "visa" ? <FaPassport className="text-base" /> : <FaKaaba className="text-base" />}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-base font-bold text-gray-700 truncate">{a.title || "Unnamed"}</p>
-                                                    <p className="text-[12px] text-gray-400 truncate">{a.sub}</p>
-                                                </div>
-                                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${a.status === "Approve" ? "bg-emerald-50 text-emerald-600" : a.status === "Reject" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500"}`}>
-                                                    {a.status || "Pending"}
-                                                </span>
-                                            </motion.button>
-                                        ))}
+                                    <div className="overflow-x-auto -mx-2">
+                                        <table className="w-full min-w-[560px]">
+                                            <thead>
+                                                <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                                                    <th className="px-2 pb-3 font-bold">Applicant</th>
+                                                    <th className="px-2 pb-3 font-bold">Service</th>
+                                                    <th className="px-2 pb-3 font-bold">Status</th>
+                                                    <th className="px-2 pb-3 font-bold">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {recentActivity.map((a, idx) => (
+                                                    <motion.tr key={a.type + a.id}
+                                                        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: idx * 0.05, duration: 0.3 }}
+                                                        whileHover={{ backgroundColor: "rgba(249,123,79,0.04)" }}
+                                                        onClick={() => { if (a.type === "visa") { const v = visas.find(x => x.id === a.id); if (v) setSelectedDoc(v); } else setActiveTab("inquiries"); }}
+                                                        className="border-b border-gray-50 last:border-0 cursor-pointer">
+                                                        <td className="px-2 py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${a.type === "visa" ? "bg-orange-50 text-orange-500" : "bg-emerald-50 text-emerald-600"}`}>
+                                                                    {(a.title || "?").slice(0, 1).toUpperCase()}
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[13px] font-bold text-gray-700 truncate">{a.title || "Unnamed"}</p>
+                                                                    <p className="text-[11px] text-gray-400 truncate">{a.sub}</p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-2 py-3 text-[13px] font-semibold text-gray-500 whitespace-nowrap">
+                                                            {a.type === "visa" ? "Visa Application" : "Umrah Booking"}
+                                                        </td>
+                                                        <td className="px-2 py-3">
+                                                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${a.status === "Approve" || a.status === "Completed" ? "bg-emerald-50 text-emerald-600" : a.status === "Reject" || a.status === "Rejected" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500"}`}>
+                                                                {a.status || "Pending"}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-2 py-3 text-[13px] font-semibold text-gray-400 whitespace-nowrap">
+                                                            {(() => { const d = parseDate(a.date); return d ? d.toLocaleDateString() : "—"; })()}
+                                                        </td>
+                                                    </motion.tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </div>
@@ -1726,6 +1723,102 @@ export default function AdminDashboard() {
                         </div>
                     )}
 
+                    {/* ════ ANALYTICS TAB ════ */}
+                    {activeTab === "analytics" && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <div className="flex items-center justify-between mb-5">
+                                    <h3 className="text-lg font-bold text-gray-800">Sales vs Purchase</h3>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => { setShowSalesDropdown(p => !p); setShowOverallDropdown(false); }}
+                                            className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                                        >
+                                            {salesPeriod} <MdKeyboardArrowDown />
+                                        </button>
+                                        {showSalesDropdown && (
+                                            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
+                                                {["This Year", "Last Year", "Last 3 Months", "Last 6 Months", "Last 12 Months"].map(opt => (
+                                                    <button key={opt} onClick={() => { setSalesPeriod(opt); setShowSalesDropdown(false); }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${salesPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
+                                                        {opt}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <ResponsiveContainer width="100%" height={280}>
+                                    <BarChart data={salesChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={2} barCategoryGap="25%" barSize={22}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                        <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}k`} domain={[0, 'dataMax + 10']} label={{ value: '$ (thousands)', angle: -90, position: 'insideLeft', fontSize: 9, fill: '#9ca3af' }} />
+                                        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+                                        <Bar dataKey="applications" name="Sales" fill="#F4A183" radius={[6, 6, 0, 0]} />
+                                        <Bar dataKey="revenue" name="Purchase" fill="#E2622D" radius={[6, 6, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                                <div className="flex items-center justify-center gap-6 mt-3 text-sm font-bold text-gray-500">
+                                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#F4A183] inline-block"></span>Sales</span>
+                                    <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#E2622D] inline-block"></span>Purchase</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-lg font-bold text-gray-800">Overall Information</h3>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => { setShowOverallDropdown(p => !p); setShowSalesDropdown(false); }}
+                                            className="flex items-center gap-1.5 text-sm font-bold text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                                        >
+                                            {overallPeriod} <MdKeyboardArrowDown />
+                                        </button>
+                                        {showOverallDropdown && (
+                                            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden min-w-[160px]">
+                                                {["Last 3 Months", "Last 6 Months", "Last 12 Months", "This Year"].map(opt => (
+                                                    <button key={opt} onClick={() => { setOverallPeriod(opt); setShowOverallDropdown(false); }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${overallPeriod === opt ? "bg-orange-500 text-white" : "text-gray-700 hover:bg-orange-50"}`}>
+                                                        {opt}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-400 mb-5">Applications Overview</p>
+                                <div className="flex items-center gap-4 mb-2">
+                                    <div className="relative w-[140px] h-[140px] shrink-0">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <RadialBarChart cx="50%" cy="50%" innerRadius="55%" outerRadius="100%" barSize={10}
+                                                data={[{ name: "Approve", value: donutData.approvedPct, fill: "#22C55E" }, { name: "Reject", value: donutData.rejectedPct, fill: "#EF4444" }]}
+                                                startAngle={90} endAngle={-270}>
+                                                <RadialBar background={{ fill: "#EEF1F4" }} dataKey="value" cornerRadius={20} clockWise />
+                                            </RadialBarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="flex-1 space-y-4">
+                                        <div>
+                                            <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.approved}</p>
+                                            <p className="text-[13px] font-bold text-emerald-600 mt-0.5">Approved</p>
+                                            <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">▲ {donutData.approvedPct}%</span>
+                                        </div>
+                                        <div>
+                                            <p className="text-2xl font-bold text-gray-800 leading-none">{donutData.rejected}</p>
+                                            <p className="text-[13px] font-bold text-red-500 mt-0.5">Rejected</p>
+                                            <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">▲ {donutData.rejectedPct}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-3 mt-auto pt-6 border-t border-gray-100 text-center">
+                                    <div className="border-r border-gray-100"><p className="text-3xl font-bold text-gray-800">{visas.length}</p><p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Visas</p></div>
+                                    <div className="border-r border-gray-100"><p className="text-3xl font-bold text-gray-800">{inquiries.length}</p><p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Umrah</p></div>
+                                    <div><p className="text-3xl font-bold text-gray-800">{messages.length}</p><p className="text-[11px] font-bold text-gray-400 uppercase mt-1">Msgs</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* ════ VISAS TAB ════ */}
                     {activeTab === "visas" && (
                         <VisaProcessList visas={filteredVisas} updateLocal={updateLocal} setSelectedDoc={setSelectedDoc} initialSearch={visaQuickFilter} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} pendingChanges={pendingChanges} onStage={stagePendingChange} onSavePending={sendPendingEmail} decisionDocs={decisionDocs} setDecisionDocs={setDecisionDocs} />
@@ -1733,7 +1826,7 @@ export default function AdminDashboard() {
 
                     {/* ════ UMRAH REQUESTS TAB ════ */}
                     {activeTab === "inquiries" && (
-                        <UmrahProcessList requests={umrahRequests} actorRole="admin" actorName={currentUser?.email || "Admin"} />
+                        <UmrahProcessList requests={umrahRequests} actorRole="admin" actorName={currentUser?.email || "Admin"} initialStatus={umrahQuickFilter} />
                     )}
 
                     {/* ════ INSURANCE TAB ════ */}
@@ -1756,6 +1849,11 @@ export default function AdminDashboard() {
                     {/* ════ SUB-ADMINS TAB ════ */}
                     {activeTab === "subadmins" && (
                         <SubAdminsTab />
+                    )}
+
+                    {/* ════ COUNTRIES TAB ════ */}
+                    {activeTab === "countries" && (
+                        <CountriesTab />
                     )}
                 </main>
             </div>

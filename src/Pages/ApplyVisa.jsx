@@ -6,7 +6,7 @@ import {
     FaPassport, FaUser, FaEnvelope, FaPhone, FaFileUpload, FaIdCard,
     FaCheckCircle, FaExclamationCircle, FaGlobe, FaArrowRight, FaEye
 } from 'react-icons/fa';
-import { getAllCountryNames, getVisaDataByCountry, calculateTotalFee } from '../Data/visaData';
+import { getAllCountryNames, getVisaDataByCountry, calculateTotalFee, ensureVisaCountriesData } from '../Data/visaData';
 
 // ImgBB Config (replaces Firebase Storage — was returning 403 Forbidden)
 const IMGBB_API_KEY = "339913c8ca610122063ecd903404baa0";
@@ -39,11 +39,23 @@ function ApplyVisa() {
     const [selectedCountryData, setSelectedCountryData] = useState(null);
     const [demoImage, setDemoImage] = useState(null); // Modal state for demo images
 
+    // Live fee/visa-type data from Firestore (`countries` collection — same
+    // data Admin > Countries edits). Fetched once on mount so changing a fee
+    // in the admin panel is reflected here on the next page load.
+    const [visaCountriesData, setVisaCountriesData] = useState(null);
+    const [countryDataLoading, setCountryDataLoading] = useState(true);
+
+    useEffect(() => {
+        ensureVisaCountriesData()
+            .then(setVisaCountriesData)
+            .finally(() => setCountryDataLoading(false));
+    }, []);
+
     // URLs of documents already uploaded in a previous attempt (e.g. before a failed payment).
     // Lets user skip re-uploading files that already made it to the cloud.
     const [existingUrls, setExistingUrls] = useState({});
 
-    const countries = getAllCountryNames();
+    const countries = getAllCountryNames(visaCountriesData);
 
     // Restore any in-progress draft (typed fields) or a fully-uploaded pending application
     // (e.g. user came back here after a failed payment) so nothing has to be re-typed or re-uploaded.
@@ -104,12 +116,16 @@ function ApplyVisa() {
 
     useEffect(() => {
         if (!currentUser) navigate('/login');
-        if (formData.country) setSelectedCountryData(getVisaDataByCountry(formData.country));
-    }, [formData.country, currentUser, navigate]);
+        if (formData.country) setSelectedCountryData(getVisaDataByCountry(visaCountriesData, formData.country));
+    }, [formData.country, currentUser, navigate, visaCountriesData]);
 
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value,
+            ...(name === 'country' ? { visaTypeIndex: 0 } : {})
+        }));
         if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
     };
 
@@ -201,7 +217,7 @@ function ApplyVisa() {
                 if (file) urls[key] = await uploadFileToCloud(file, appNumber, key);
             }));
 
-            const totalFee = calculateTotalFee(formData.country, formData.visaTypeIndex, formData.urgentProcessing);
+            const totalFee = calculateTotalFee(visaCountriesData, formData.country, formData.visaTypeIndex, formData.urgentProcessing);
             const visaType = selectedCountryData.visaTypes[formData.visaTypeIndex];
 
             const visaApplicationData = {
@@ -240,6 +256,18 @@ function ApplyVisa() {
         }
     };
 
+    if (countryDataLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full"
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-12 px-4">
             <div className="max-w-4xl mx-auto">
@@ -266,6 +294,30 @@ function ApplyVisa() {
                             {countries.map(({ key, name }) => <option key={key} value={key}>{name}</option>)}
                         </select>
                     </div>
+
+                    {/* Visa Type Section — shown once country picked. Some countries have 2-3 types (e.g. Pakistan) */}
+                    {selectedCountryData && selectedCountryData.visaTypes.length > 0 && (
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                                <FaPassport className="text-emerald-600" /> Select Visa Type *
+                            </label>
+                            {selectedCountryData.visaTypes.length === 1 ? (
+                                <div className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-slate-50 text-slate-700">
+                                    {selectedCountryData.visaTypes[0].type} — PKR {selectedCountryData.visaTypes[0].fee.toLocaleString()}
+                                </div>
+                            ) : (
+                                <select name="visaTypeIndex" value={formData.visaTypeIndex}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, visaTypeIndex: Number(e.target.value) }))}
+                                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 transition-all">
+                                    {selectedCountryData.visaTypes.map((vt, idx) => (
+                                        <option key={idx} value={idx}>
+                                            {vt.type} — PKR {vt.fee.toLocaleString()}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                    )}
 
                     {/* Personal Info */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

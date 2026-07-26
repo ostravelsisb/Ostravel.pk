@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../firbase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -118,9 +118,13 @@ const docStatusColor = (status) => ({
  * (from an onSnapshot listener on the `umrahApplications` collection)
  * and who is acting (`actorRole`, `actorName`) for the status-history log.
  */
-export default function UmrahProcessList({ requests, actorRole = 'admin', actorName = 'Admin' }) {
+export default function UmrahProcessList({ requests, actorRole = 'admin', actorName = 'Admin', initialStatus = 'All' }) {
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('All');
+    const [statusFilter, setStatusFilter] = useState(initialStatus);
+
+    // Keep in sync if the parent pushes a new quick-filter (e.g. clicking a
+    // dashboard stat card) after this component has already mounted.
+    useEffect(() => { setStatusFilter(initialStatus); }, [initialStatus]);
     const [selected, setSelected] = useState(null);
     const [paymentModal, setPaymentModal] = useState(null); // request being sent a payment request
     const [amountInput, setAmountInput] = useState('');

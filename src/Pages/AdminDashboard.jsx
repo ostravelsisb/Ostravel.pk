@@ -94,6 +94,91 @@ const stagger = {
     show: { transition: { staggerChildren: 0.07 } }
 };
 
+// ─── COUNT-UP NUMBER ──────────────────────────────────────────────────────────
+function CountUp({ value, prefix = "", duration = 900 }) {
+    const [display, setDisplay] = useState(0);
+    const target = typeof value === "number" && !Number.isNaN(value) ? value : 0;
+
+    useEffect(() => {
+        if (target === 0) { setDisplay(0); return; }
+        let raf;
+        let start = null;
+        const tick = (ts) => {
+            if (start === null) start = ts;
+            const progress = Math.min((ts - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3); // ease-out-cubic
+            setDisplay(Math.round(target * eased));
+            if (progress < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [target, duration]);
+
+    return <>{prefix}{display.toLocaleString()}</>;
+}
+
+// ─── UNIFORM STAT CARD THEMES ─────────────────────────────────────────────────
+const STAT_THEMES = {
+    orange: { grad: "from-orange-100/80 via-orange-50/40 to-white", iconGrad: "from-orange-300 via-orange-500 to-[#F97B4F]", blob1: "bg-orange-300", blob2: "bg-amber-200", dot: "bg-orange-500", text: "text-orange-600", glow: "rgba(249,123,79,0.4)", ring: "hover:ring-orange-300/60", border: "border-orange-100" },
+    green:  { grad: "from-emerald-100/80 via-emerald-50/40 to-white", iconGrad: "from-emerald-300 via-emerald-500 to-[#28C76F]", blob1: "bg-emerald-300", blob2: "bg-teal-200", dot: "bg-emerald-500", text: "text-emerald-600", glow: "rgba(40,199,111,0.4)", ring: "hover:ring-emerald-300/60", border: "border-emerald-100" },
+    sky:    { grad: "from-sky-100/80 via-sky-50/40 to-white", iconGrad: "from-sky-300 via-sky-500 to-[#00B4D8]", blob1: "bg-sky-300", blob2: "bg-cyan-200", dot: "bg-sky-500", text: "text-sky-600", glow: "rgba(0,180,216,0.4)", ring: "hover:ring-sky-300/60", border: "border-sky-100" },
+    amber:  { grad: "from-amber-100/80 via-amber-50/40 to-white", iconGrad: "from-amber-300 via-amber-500 to-[#FFB300]", blob1: "bg-amber-300", blob2: "bg-yellow-200", dot: "bg-amber-500", text: "text-amber-600", glow: "rgba(255,179,0,0.4)", ring: "hover:ring-amber-300/60", border: "border-amber-100" },
+    red:    { grad: "from-red-100/80 via-red-50/40 to-white", iconGrad: "from-red-300 via-red-500 to-[#F0473C]", blob1: "bg-red-300", blob2: "bg-rose-200", dot: "bg-red-500", text: "text-red-500", glow: "rgba(240,71,60,0.4)", ring: "hover:ring-red-300/60", border: "border-red-100" },
+    blue:   { grad: "from-blue-100/80 via-blue-50/40 to-white", iconGrad: "from-blue-300 via-blue-500 to-[#3B82F6]", blob1: "bg-blue-300", blob2: "bg-indigo-200", dot: "bg-blue-500", text: "text-blue-600", glow: "rgba(59,130,246,0.4)", ring: "hover:ring-blue-300/60", border: "border-blue-100" },
+};
+
+// ─── UNIFORM STAT CARD (used for all overview KPI / Visa / Umrah cards) ──────
+const statCardVariants = {
+    hidden: { opacity: 0, y: 18, scale: 0.96 },
+    show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
+};
+
+function StatCard({ icon, label, value, prefix = "", trend, theme = "orange", onClick }) {
+    const t = STAT_THEMES[theme] || STAT_THEMES.orange;
+    return (
+        <motion.div
+            variants={statCardVariants}
+            whileHover={{ y: -8, scale: 1.015, boxShadow: `0 26px 44px -16px ${t.glow}` }}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            onClick={onClick}
+            className={`group relative isolate overflow-hidden rounded-[24px] p-5 cursor-pointer bg-gradient-to-br ${t.grad} border ${t.border} ring-1 ring-transparent ${t.ring} shadow-[0_2px_14px_-4px_rgba(15,23,42,0.08)] transition-[box-shadow,ring] duration-500`}
+        >
+            {/* ambient gradient blobs — drift + grow on hover */}
+            <div className={`pointer-events-none absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-30 ${t.blob1} transition-all duration-700 ease-out group-hover:scale-150 group-hover:opacity-45 group-hover:-translate-x-3 group-hover:translate-y-3`} />
+            <div className={`pointer-events-none absolute -left-8 -bottom-10 w-24 h-24 rounded-full blur-3xl opacity-20 ${t.blob2} transition-all duration-700 ease-out group-hover:scale-125 group-hover:opacity-35`} />
+
+            {/* diagonal shine sweep on hover */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[24px]">
+                <div className="absolute -inset-y-8 -left-1/2 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-[120%] group-hover:translate-x-[380%] transition-transform duration-[1100ms] ease-out" />
+            </div>
+
+            <div className="relative flex items-center gap-3 mb-5">
+                <div className={`relative w-11 h-11 rounded-2xl bg-gradient-to-br ${t.iconGrad} flex items-center justify-center text-white text-[19px] shadow-lg shrink-0 transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-6`}>
+                    <span className={`absolute inset-0 rounded-2xl ${t.blob1} opacity-0 group-hover:opacity-40 blur-md scale-125 transition-opacity duration-500`} />
+                    <span className="relative">{icon}</span>
+                </div>
+                <p className="text-[13px] font-bold text-slate-500 tracking-wide leading-snug">{label}</p>
+            </div>
+
+            <h3 className="relative text-[27px] font-extrabold text-slate-800 tabular-nums tracking-tight mb-2 leading-none transition-transform duration-300 group-hover:scale-[1.04] origin-left">
+                <CountUp value={value} prefix={prefix} />
+            </h3>
+
+            <div className="relative flex items-center gap-1.5">
+                <span className={`relative flex w-1.5 h-1.5`}>
+                    <span className={`absolute inline-flex h-full w-full rounded-full ${t.dot} opacity-60 group-hover:animate-ping`} />
+                    <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${t.dot} shadow-sm`} />
+                </span>
+                <p className={`text-[12px] font-bold ${t.text}`}>{trend}</p>
+            </div>
+
+            {/* bottom accent line, animates in on hover */}
+            <div className={`absolute left-0 bottom-0 h-[3px] w-0 group-hover:w-full bg-gradient-to-r ${t.iconGrad} transition-all duration-500 ease-out rounded-full shadow-[0_0_8px_rgba(0,0,0,0.15)]`} />
+        </motion.div>
+    );
+}
+
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const UMRAH_STATUS_STYLES = {
     "Pending":       { dot: "bg-amber-400",   pill: "bg-amber-50 text-amber-600 border-amber-200" },
@@ -1515,86 +1600,31 @@ export default function AdminDashboard() {
                         <div className="space-y-6">
                             {/* KPI Cards */}
                             <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}>
-                                <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(249,123,79,0.25)" }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => navigate("/admin/revenue")} whileTap={{ scale: 0.97 }}
-                                    className="bg-[#FEE8E0] rounded-2xl p-5 border border-black/5 cursor-pointer">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#F97B4F] flex items-center justify-center text-white text-xl shadow-sm shadow-orange-300"><MdReceipt /></div>
-                                        <p className="text-base font-bold text-gray-600">Total Revenue</p>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {stats.revenue.toLocaleString()}</h3>
-                                    <p className="text-[13px] font-bold text-orange-600">PKR {stats.revenue.toLocaleString()} collected</p>
-                                </motion.div>
-
-                                <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(40,199,111,0.25)" }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => setActiveTab("visas")} whileTap={{ scale: 0.97 }}
-                                    className="bg-[#E6F9F0] rounded-2xl p-5 border border-black/5 cursor-pointer">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#28C76F] flex items-center justify-center text-white text-xl shadow-sm shadow-green-300"><MdSwapHoriz /></div>
-                                        <p className="text-base font-bold text-gray-600">Visa Applications</p>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{visas.length}</h3>
-                                    <p className="text-[13px] font-bold text-emerald-600">PKR {stats.visaRevenue.toLocaleString()} collected</p>
-                                </motion.div>
-
-                                <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(0,180,216,0.25)" }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => setActiveTab("inquiries")} whileTap={{ scale: 0.97 }}
-                                    className="bg-[#E0F3FE] rounded-2xl p-5 border border-black/5 cursor-pointer">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#00B4D8] flex items-center justify-center text-white text-xl shadow-sm shadow-sky-300"><FaKaaba /></div>
-                                        <p className="text-base font-bold text-gray-600">Umrah Applications</p>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{umrahRequests.length}</h3>
-                                    <p className="text-[13px] font-bold text-sky-600">PKR {stats.umrahRevenue.toLocaleString()} collected</p>
-                                </motion.div>
-
-                                <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(255,179,0,0.25)" }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                    onClick={() => setActiveTab("insurance")} whileTap={{ scale: 0.97 }}
-                                    className="bg-[#FFF8E1] rounded-2xl p-5 border border-black/5 cursor-pointer">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#FFB300] flex items-center justify-center text-white text-xl shadow-sm shadow-amber-300"><FaUserShield /></div>
-                                        <p className="text-base font-bold text-gray-600">Insurance Revenue</p>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {stats.insuranceRevenue.toLocaleString()}</h3>
-                                    <p className="text-[13px] font-bold text-amber-600">PKR {stats.insuranceRevenue.toLocaleString()} collected</p>
-                                </motion.div>
+                                <StatCard theme="green" icon={<MdReceipt />} label="Total Revenue" value={stats.revenue} prefix="PKR " trend={`${(visas.length + umrahRequests.length + dedupedInsuranceRecords.length).toLocaleString()} applications`} onClick={() => navigate("/admin/revenue")} />
+                                <StatCard theme="orange" icon={<MdSwapHoriz />} label="Visa Revenue" value={stats.visaRevenue} prefix="PKR " trend={`${visas.length.toLocaleString()} applications`} onClick={() => setActiveTab("visas")} />
+                                <StatCard theme="sky" icon={<FaKaaba />} label="Umrah Revenue" value={stats.umrahRevenue} prefix="PKR " trend={`${umrahRequests.length.toLocaleString()} applications`} onClick={() => setActiveTab("inquiries")} />
+                                <StatCard theme="amber" icon={<FaUserShield />} label="Insurance Revenue" value={stats.insuranceRevenue} prefix="PKR " trend={`${dedupedInsuranceRecords.length.toLocaleString()} applications`} onClick={() => setActiveTab("insurance")} />
                             </motion.div>
 
                             {/* Visa Requests */}
-                            <div>
-                                <div className="flex items-center justify-between mb-3">
-                                    <h3 className="text-base font-bold text-gray-700">Visa Requests</h3>
-                                    <button onClick={() => goToVisas("")} className="text-[13px] font-bold text-orange-500 hover:text-orange-600 flex items-center gap-1">
-                                        View all <MdChevronRight />
-                                    </button>
-                                </div>
-                                <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
-                                    {[
-                                        { label: "Total Approved Visas", value: stats.approved, trend: "100% Approval Rate", trendColor: "text-emerald-600", action: () => goToVisas("Approve"), icon: <MdCheckCircle className="text-emerald-500 text-2xl" />, iconBg: "bg-emerald-50" },
-                                        { label: "Rejected Applications", value: stats.rejected, trend: "Action required", trendColor: "text-red-500", action: () => goToVisas("Reject"), icon: <MdError className="text-red-500 text-2xl" />, iconBg: "bg-red-50" },
-                                        { label: "Docs Awaiting Review", value: stats.pending, trend: stats.pending ? "Needs attention" : "Queue is empty", trendColor: stats.pending ? "text-amber-600" : "text-gray-400", action: () => goToVisas("Doc Received"), icon: <MdOutlineCreditCard className="text-amber-500 text-2xl" />, iconBg: "bg-amber-50" },
-                                        { label: "Interviews", value: stats.interviews, trend: "Scheduled this week", trendColor: "text-indigo-600", action: () => goToVisas("Interview"), icon: <MdCalendarToday className="text-indigo-500 text-2xl" />, iconBg: "bg-indigo-50" },
-                                    ].map((c, i) => (
-                                        <motion.div key={i} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                            whileHover={{ y: -4, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                            onClick={c.action}
-                                            className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-pointer">
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <div className={`w-11 h-11 rounded-xl ${c.iconBg} flex items-center justify-center shrink-0`}>{c.icon}</div>
-                                                <p className="text-[15px] font-bold text-gray-600 leading-tight">{c.label}</p>
-                                            </div>
-                                            <h3 className="text-3xl font-bold text-gray-800 mb-2">{c.value}</h3>
-                                            <div className="pt-3 border-t border-gray-100">
-                                                <span className={`text-[12px] font-bold ${c.trendColor}`}>{c.trend}</span>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </motion.div>
-                            </div>
+<div>
+    <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-bold text-gray-700">Visa Requests</h3>
+        <button onClick={() => goToVisas("")} className="text-[13px] font-bold text-orange-500 hover:text-orange-600 flex items-center gap-1">
+            View all <MdChevronRight />
+        </button>
+    </div>
+    <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
+        {[
+            { label: "Total Approved Visas", value: stats.approved, trend: "100% Approval Rate", theme: "green", action: () => goToVisas("Approve"), icon: <MdCheckCircle /> },
+            { label: "Rejected Applications", value: stats.rejected, trend: "Action required", theme: "red", action: () => goToVisas("Reject"), icon: <MdError /> },
+            { label: "Interviews", value: stats.interviews, trend: "Scheduled this week", theme: "sky", action: () => goToVisas("Interview"), icon: <MdCalendarToday /> },
+            { label: "Docs Awaiting Review", value: stats.pending, trend: stats.pending ? "Needs attention" : "Queue is empty", theme: "amber", action: () => goToVisas("Doc Received"), icon: <MdOutlineCreditCard /> },
+        ].map((c, i) => (
+            <StatCard key={i} theme={c.theme} icon={c.icon} label={c.label} value={c.value} trend={c.trend} onClick={c.action} />
+        ))}
+    </motion.div>
+</div>
 
                             {/* Umrah Requests */}
                             <div>
@@ -1606,116 +1636,112 @@ export default function AdminDashboard() {
                                 </div>
                                 <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } } }}>
                                     {[
-                                        { label: "Completed", value: umrahStats.completed, trend: "Successfully processed", trendColor: "text-emerald-600", action: () => goToUmrah("Completed"), icon: <MdCheckCircle className="text-emerald-500 text-2xl" />, iconBg: "bg-emerald-50" },
-                                        { label: "Rejected", value: umrahStats.rejected, trend: umrahStats.rejected ? "Requires attention" : "None rejected", trendColor: "text-red-500", action: () => goToUmrah("Rejected"), icon: <MdError className="text-red-500 text-2xl" />, iconBg: "bg-red-50" },
-                                        { label: "Paid", value: umrahStats.paid, trend: "Transaction confirmed", trendColor: "text-blue-600", action: () => goToUmrah("Paid"), icon: <MdOutlineCreditCard className="text-blue-500 text-2xl" />, iconBg: "bg-blue-50" },
-                                        { label: "Payment Requested", value: umrahStats.paymentRequested, trend: umrahStats.paymentRequested ? "Awaiting customer action" : "All settled", trendColor: "text-amber-600", action: () => goToUmrah("Payment Requested"), icon: <MdDescription className="text-amber-500 text-2xl" />, iconBg: "bg-amber-50" },
+                                        { label: "Completed", value: umrahStats.completed, trend: "Successfully processed", theme: "green", action: () => goToUmrah("Completed"), icon: <MdCheckCircle /> },
+                                        { label: "Rejected", value: umrahStats.rejected, trend: umrahStats.rejected ? "Requires attention" : "None rejected", theme: "red", action: () => goToUmrah("Rejected"), icon: <MdError /> },
+                                        { label: "Paid", value: umrahStats.paid, trend: "Transaction confirmed", theme: "sky", action: () => goToUmrah("Paid"), icon: <MdOutlineCreditCard /> },
+                                        { label: "Payment Requested", value: umrahStats.paymentRequested, trend: umrahStats.paymentRequested ? "Awaiting customer action" : "All settled", theme: "amber", action: () => goToUmrah("Payment Requested"), icon: <MdDescription /> },
                                     ].map((c, i) => (
-                                        <motion.div key={i} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                            whileHover={{ y: -4, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.35, ease: "easeOut" }}
-                                            onClick={c.action}
-                                            className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-pointer">
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <div className={`w-11 h-11 rounded-xl ${c.iconBg} flex items-center justify-center shrink-0`}>{c.icon}</div>
-                                                <p className="text-[15px] font-bold text-gray-600 leading-tight">{c.label}</p>
-                                            </div>
-                                            <h3 className="text-3xl font-bold text-gray-800 mb-2">{c.value}</h3>
-                                            <div className="pt-3 border-t border-gray-100">
-                                                <span className={`text-[12px] font-bold ${c.trendColor}`}>{c.trend}</span>
-                                            </div>
-                                        </motion.div>
+                                        <StatCard key={i} theme={c.theme} icon={c.icon} label={c.label} value={c.value} trend={c.trend} onClick={c.action} />
                                     ))}
                                 </motion.div>
                             </div>
 
                             {/* Recent Submissions */}
-                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                                <div className="flex items-center justify-between mb-5">
-                                    <h3 className="text-lg font-bold text-gray-800">Recent Submissions</h3>
-                                    <button onClick={() => goToVisas("")} className="text-[13px] font-bold text-orange-500 hover:text-orange-600">View All Applications</button>
+                            <div className="bg-white rounded-[28px] border border-gray-100 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] p-7 sm:p-8">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-[#F97B4F] flex items-center justify-center text-white text-xl shadow-lg shadow-orange-200"><MdReceipt /></div>
+                                        <div>
+                                            <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Recent Submissions</h3>
+                                            <p className="text-[13px] font-semibold text-slate-400">Latest visa &amp; umrah activity</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => goToVisas("")} className="flex items-center gap-1 text-[13px] font-bold text-orange-500 hover:text-white bg-orange-50 hover:bg-orange-500 px-4 py-2.5 rounded-full transition-all duration-300">
+                                        View All <MdChevronRight />
+                                    </button>
                                 </div>
                                 {recentActivity.length === 0 ? (
-                                    <p className="text-base text-gray-400 font-bold text-center py-8">No recent activity</p>
-                                ) : (
-                                    <div className="overflow-x-auto -mx-2">
-                                        <table className="w-full min-w-[560px]">
-                                            <thead>
-                                                <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                                                    <th className="px-2 pb-3 font-bold">Applicant</th>
-                                                    <th className="px-2 pb-3 font-bold">Service</th>
-                                                    <th className="px-2 pb-3 font-bold">Status</th>
-                                                    <th className="px-2 pb-3 font-bold">Date</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {recentActivity.map((a, idx) => (
-                                                    <motion.tr key={a.type + a.id}
-                                                        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                                                        transition={{ delay: idx * 0.05, duration: 0.3 }}
-                                                        whileHover={{ backgroundColor: "rgba(249,123,79,0.04)" }}
-                                                        onClick={() => { if (a.type === "visa") { const v = visas.find(x => x.id === a.id); if (v) setSelectedDoc(v); } else setActiveTab("inquiries"); }}
-                                                        className="border-b border-gray-50 last:border-0 cursor-pointer">
-                                                        <td className="px-2 py-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${a.type === "visa" ? "bg-orange-50 text-orange-500" : "bg-emerald-50 text-emerald-600"}`}>
-                                                                    {(a.title || "?").slice(0, 1).toUpperCase()}
-                                                                </div>
-                                                                <div className="min-w-0">
-                                                                    <p className="text-[13px] font-bold text-gray-700 truncate">{a.title || "Unnamed"}</p>
-                                                                    <p className="text-[11px] text-gray-400 truncate">{a.sub}</p>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-2 py-3 text-[13px] font-semibold text-gray-500 whitespace-nowrap">
-                                                            {a.type === "visa" ? "Visa Application" : "Umrah Booking"}
-                                                        </td>
-                                                        <td className="px-2 py-3">
-                                                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${a.status === "Approve" || a.status === "Completed" ? "bg-emerald-50 text-emerald-600" : a.status === "Reject" || a.status === "Rejected" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500"}`}>
-                                                                {a.status || "Pending"}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-2 py-3 text-[13px] font-semibold text-gray-400 whitespace-nowrap">
-                                                            {(() => { const d = parseDate(a.date); return d ? d.toLocaleDateString() : "—"; })()}
-                                                        </td>
-                                                    </motion.tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                    <div className="text-center py-16">
+                                        <MdReceipt className="text-gray-200 text-6xl mx-auto mb-3" />
+                                        <p className="text-gray-400 font-bold">No recent activity</p>
                                     </div>
+                                ) : (
+                                    <motion.div className="space-y-2.5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}>
+                                        {recentActivity.map((a, idx) => {
+                                            const isVisa = a.type === "visa";
+                                            const isGood = a.status === "Approve" || a.status === "Completed";
+                                            const isBad = a.status === "Reject" || a.status === "Rejected";
+                                            const d = parseDate(a.date);
+                                            return (
+                                                <motion.div key={a.type + a.id}
+                                                    variants={{ hidden: { opacity: 0, x: -12 }, show: { opacity: 1, x: 0, transition: { duration: 0.35, ease: "easeOut" } } }}
+                                                    whileHover={{ scale: 1.008, backgroundColor: isVisa ? "rgba(249,123,79,0.05)" : "rgba(16,185,129,0.05)" }}
+                                                    onClick={() => { if (isVisa) { const v = visas.find(x => x.id === a.id); if (v) setSelectedDoc(v); } else setActiveTab("inquiries"); }}
+                                                    className="group flex items-center gap-4 p-4 rounded-2xl border border-gray-100 hover:border-transparent hover:shadow-md cursor-pointer transition-all duration-300">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-base font-extrabold text-white shadow-md transition-transform duration-300 group-hover:scale-105 ${isVisa ? "bg-gradient-to-br from-orange-400 to-[#F97B4F]" : "bg-gradient-to-br from-emerald-400 to-[#28C76F]"}`}>
+                                                        {(a.title || "?").slice(0, 1).toUpperCase()}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-[15px] font-bold text-slate-800 truncate">{a.title || "Unnamed"}</p>
+                                                        <p className="text-[13px] text-slate-400 font-medium truncate">{a.sub}</p>
+                                                    </div>
+                                                    <span className={`hidden sm:inline-flex text-[12px] font-bold px-3 py-1.5 rounded-full whitespace-nowrap ${isVisa ? "bg-orange-50 text-orange-600" : "bg-emerald-50 text-emerald-600"}`}>
+                                                        {isVisa ? "Visa Application" : "Umrah Booking"}
+                                                    </span>
+                                                    <span className={`text-[12px] font-bold px-3 py-1.5 rounded-full whitespace-nowrap ${isGood ? "bg-emerald-50 text-emerald-600" : isBad ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500"}`}>
+                                                        {a.status || "Pending"}
+                                                    </span>
+                                                    <span className="hidden md:block text-[13px] font-semibold text-slate-400 whitespace-nowrap w-24 text-right">
+                                                        {d ? d.toLocaleDateString() : "—"}
+                                                    </span>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </motion.div>
                                 )}
                             </div>
 
                             {/* Recently Edited */}
-                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                                <div className="flex items-center justify-between mb-5">
-                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><MdCheckCircle className="text-blue-500" />Recently Edited Applications</h3>
+                            <div className="bg-white rounded-[28px] border border-gray-100 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] p-7 sm:p-8">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-400 to-[#3B82F6] flex items-center justify-center text-white text-xl shadow-lg shadow-blue-200"><MdCheckCircle /></div>
+                                        <div>
+                                            <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Recently Edited Applications</h3>
+                                            <p className="text-[13px] font-semibold text-slate-400">Client-resubmitted visa applications</p>
+                                        </div>
+                                    </div>
                                     {visas.filter(v => v.userConfirmed).length > 0 && (
-                                        <span className="bg-blue-100 text-blue-700 text-sm font-bold px-3 py-1 rounded-full">{visas.filter(v => v.userConfirmed).length} New</span>
+                                        <span className="bg-blue-500 text-white text-[13px] font-bold px-4 py-2 rounded-full shadow-md shadow-blue-200 animate-pulse">{visas.filter(v => v.userConfirmed).length} New</span>
                                     )}
                                 </div>
                                 {visas.filter(v => v.userConfirmed).length === 0 ? (
-                                    <div className="text-center py-12"><MdCheckCircle className="text-gray-200 text-5xl mx-auto mb-3" /><p className="text-gray-500 font-bold">No recently edited applications</p></div>
+                                    <div className="text-center py-16"><MdCheckCircle className="text-gray-200 text-6xl mx-auto mb-3" /><p className="text-gray-400 font-bold">No recently edited applications</p></div>
                                 ) : (
                                     <>
-                                    <div className="space-y-3">
+                                    <motion.div className="space-y-3" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}>
                                         {visas.filter(v => v.userConfirmed).slice((recentEditPage-1)*ITEMS_PER_PAGE, recentEditPage*ITEMS_PER_PAGE).map(visa => (
-                                            <div key={visa.id} className="flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-100">
-                                                <div className="flex items-center gap-4 flex-1">
-                                                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center"><FaPassport className="text-blue-500" /></div>
-                                                    <div className="flex-1">
-                                                        <p className="font-bold text-gray-800">{visa.applicantName}</p>
-                                                        <p className="text-sm text-gray-500">{visa.country} • {visa.visaType}</p>
-                                                        {visa.adminMessage && <p className="text-sm text-blue-700 mt-1">📝 Original Request: {visa.adminMessage}</p>}
-                                                        {visa.userConfirmedAt && <p className="text-sm text-gray-400 mt-1">✓ Edited on {new Date(visa.userConfirmedAt).toLocaleDateString()} at {new Date(visa.userConfirmedAt).toLocaleTimeString()}</p>}
+                                            <motion.div key={visa.id}
+                                                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } } }}
+                                                whileHover={{ y: -3, boxShadow: "0 16px 32px -14px rgba(59,130,246,0.28)" }}
+                                                className="relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-gradient-to-br from-blue-50/80 via-white to-white rounded-2xl border border-blue-100 transition-shadow duration-300">
+                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-blue-400 to-blue-600" />
+                                                <div className="flex items-center gap-4 flex-1 min-w-0 pl-2">
+                                                    <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shrink-0 text-white text-lg shadow-md shadow-blue-200"><FaPassport /></div>
+                                                    <div className="min-w-0">
+                                                        <p className="font-extrabold text-slate-800 text-[16px] truncate">{visa.applicantName}</p>
+                                                        <p className="text-[13px] text-slate-500 font-semibold">{visa.country} • {visa.visaType}</p>
+                                                        {visa.adminMessage && <p className="text-[13px] text-blue-700 mt-1.5 font-medium">📝 Original Request: {visa.adminMessage}</p>}
+                                                        {visa.userConfirmedAt && <p className="text-[12px] text-slate-400 mt-1 font-semibold">✓ Edited on {new Date(visa.userConfirmedAt).toLocaleDateString()} at {new Date(visa.userConfirmedAt).toLocaleTimeString()}</p>}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => setHistoryVisa(visa)} className="text-sm font-bold text-blue-600 bg-white px-3 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all border border-blue-100">📋 View History</button>
-                                                    <span className="text-sm font-bold text-blue-600 bg-white px-3 py-1.5 rounded-full animate-pulse border border-blue-100">RE-SUBMITTED</span>
+                                                <div className="flex items-center gap-2 shrink-0 pl-2 sm:pl-0">
+                                                    <button onClick={() => setHistoryVisa(visa)} className="text-[13px] font-bold text-blue-600 bg-white px-4 py-2 rounded-full hover:bg-blue-600 hover:text-white transition-all border border-blue-200 shadow-sm">📋 View History</button>
+                                                    <span className="text-[13px] font-bold text-blue-600 bg-white px-4 py-2 rounded-full animate-pulse border border-blue-200 shadow-sm">RE-SUBMITTED</span>
                                                 </div>
-                                            </div>
+                                            </motion.div>
                                         ))}
-                                    </div>
+                                    </motion.div>
                                     <Pagination total={visas.filter(v => v.userConfirmed).length} page={recentEditPage} onChange={setRecentEditPage} />
                                     </>
                                 )}

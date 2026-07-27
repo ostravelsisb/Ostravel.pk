@@ -179,6 +179,7 @@
   },
   "active": "2d805c49af368507",
   "lastOpenFiles": [
+    "src.zip",
     "node_modules/@tailwindcss/oxide-android-arm64",
     "node_modules/@rollup/rollup-android-arm-eabi",
     "node_modules/lightningcss-win32-arm64-msvc",
@@ -189,7 +190,6 @@
     "node_modules/lightningcss-linux-arm64-musl",
     "node_modules/lightningcss-linux-arm64-gnu",
     "node_modules/lightningcss-linux-arm-gnueabihf",
-    "node_modules/@esbuild/freebsd-arm64",
     "node_modules/xlsx/README.md",
     "node_modules/dotenv/skills/dotenvx/SKILL.md",
     "node_modules/dotenv/skills/dotenv/SKILL.md",

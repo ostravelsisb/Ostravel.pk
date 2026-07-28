@@ -15,9 +15,14 @@ const ICON_OPTIONS = [
   "FaCar", "FaFileSignature", "FaGavel", "FaLaptopCode", "FaPaw", "FaSyringe",
 ];
 
+const PROCESSING_TYPES = [
+  { value: "visa", label: "Visa Processing" },
+  { value: "file", label: "File Processing" },
+];
+
 const emptyVisaCard = () => ({
   title: "", subtitle: "", totalFee: "", processingTime: "", validity: "",
-  stay: "", category: "", documents: [], note: "",
+  stay: "", category: "", documents: [], note: "", processingType: "visa",
 });
 const emptyOffice = () => ({ label: "Embassy", title: "", address: "", phone: "", fax: "", email: "", note: "" });
 const emptyFaq = () => ({ q: "", a: "" });
@@ -303,6 +308,14 @@ export default function CountriesManagement() {
                         <Field label="Validity" value={v.validity} onChange={(val) => updateArrItem("visaCards", i, { validity: val })} />
                         <Field label="Stay Duration" value={v.stay} onChange={(val) => updateArrItem("visaCards", i, { stay: val })} />
                         <Field label="Category" value={v.category} onChange={(val) => updateArrItem("visaCards", i, { category: val })} />
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500">Processing Type</label>
+                          <select value={v.processingType || "visa"}
+                            onChange={(e) => updateArrItem("visaCards", i, { processingType: e.target.value })}
+                            className="w-full mt-1 p-2 border border-gray-200 rounded-lg">
+                            {PROCESSING_TYPES.map((pt) => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
+                          </select>
+                        </div>
                       </div>
                       <label className="text-xs font-semibold text-gray-500 mt-3 block">Documents (one per line)</label>
                       <textarea value={(v.documents || []).join("\n")} onChange={(e) => updateDocuments(i, e.target.value)}

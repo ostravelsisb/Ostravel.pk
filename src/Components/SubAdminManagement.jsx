@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { db, createSubAdmin } from "../firbase";
 import { useAuth } from "../Context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,16 +11,10 @@ import { FaUserShield, FaGlobe } from "react-icons/fa";
 import { logSubAdminCreation, logSubAdminUpdate } from "../Utils/activityLogger";
 import { notify } from "./Toast";
 
-// List of Asian countries for assignment
-const ASIAN_COUNTRIES = [
-    "Afghanistan", "Azerbaijan", "Bahrain", "Bangladesh", "Bhutan", "Brunei",
-    "Cambodia", "China", "Georgia", "India", "Indonesia", "Iran", "Iraq",
-    "Japan", "Jordan", "Kazakhstan", "Kuwait", "Kyrgyzstan", "Laos", "Lebanon",
-    "Malaysia", "Maldives", "Mongolia", "Myanmar", "Nepal", "North Korea",
-    "Oman", "Pakistan", "Palestine", "Philippines", "Qatar", "Saudi Arabia",
-    "Singapore", "South Korea", "Sri Lanka", "Syria", "Tajikistan", "Thailand",
-    "Turkey", "Turkmenistan", "United Arab Emirates", "Uzbekistan", "Vietnam", "Yemen"
-];
+// Countries assignable to sub-admins are now loaded live from the
+// "countries" Firestore collection (the same collection edited on the
+// Countries Management screen). Add a country there and it shows up here;
+// remove it and it disappears from here too — no hardcoded list to maintain.
 
 export default function SubAdminManagement() {
     const { currentUser, userData } = useAuth();
@@ -28,6 +22,7 @@ export default function SubAdminManagement() {
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingSubAdmin, setEditingSubAdmin] = useState(null);
+    const [availableCountries, setAvailableCountries] = useState([]);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -44,6 +39,22 @@ export default function SubAdminManagement() {
     // Fetch all sub-admins
     useEffect(() => {
         fetchSubAdmins();
+    }, []);
+
+    // Live-sync assignable countries with the "countries" collection: adding
+    // a country in Countries Management makes it selectable here right away,
+    // removing it there removes it from this list automatically.
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, "countries"), (snap) => {
+            const names = snap.docs
+                .map((d) => d.data()?.name)
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b));
+            setAvailableCountries(names);
+        }, (error) => {
+            console.error("Error syncing countries:", error);
+        });
+        return () => unsub();
     }, []);
 
     const fetchSubAdmins = async () => {
@@ -340,7 +351,7 @@ export default function SubAdminManagement() {
                                                 className="w-full px-3 py-2 mb-3 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 bg-white"
                                             />
                                             <div className="flex flex-wrap gap-1.5 max-h-52 overflow-y-auto pr-1">
-                                                {ASIAN_COUNTRIES
+                                                {availableCountries
                                                     .filter(c => c.toLowerCase().includes(countrySearch.trim().toLowerCase()))
                                                     .map(country => (
                                                         <button
@@ -546,7 +557,7 @@ export default function SubAdminManagement() {
                                     </label>
                                     <div className="border border-slate-200 rounded-xl p-4 max-h-64 overflow-y-auto">
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                            {ASIAN_COUNTRIES.map(country => (
+                                            {availableCountries.map(country => (
                                                 <button
                                                     key={country}
                                                     type="button"

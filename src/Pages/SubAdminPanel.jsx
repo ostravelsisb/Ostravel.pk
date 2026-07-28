@@ -363,6 +363,88 @@ const StatusDropdown = ({ id, currentStatus, collectionName, onUpdate, country, 
     );
 };
 
+// ─── COUNT-UP NUMBER ──────────────────────────────────────────────────────────
+function CountUp({ value, prefix = "", duration = 900 }) {
+    const [display, setDisplay] = useState(0);
+    const target = typeof value === "number" && !Number.isNaN(value) ? value : 0;
+
+    useEffect(() => {
+        if (target === 0) { setDisplay(0); return; }
+        let raf;
+        let start = null;
+        const tick = (ts) => {
+            if (start === null) start = ts;
+            const progress = Math.min((ts - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setDisplay(Math.round(target * eased));
+            if (progress < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [target, duration]);
+
+    return <>{prefix}{display.toLocaleString()}</>;
+}
+
+// ─── UNIFORM STAT CARD THEMES ─────────────────────────────────────────────────
+const STAT_THEMES = {
+    orange: { grad: "from-orange-100/80 via-orange-50/40 to-white", iconGrad: "from-orange-300 via-orange-500 to-[#F97B4F]", blob1: "bg-orange-300", blob2: "bg-amber-200", dot: "bg-orange-500", text: "text-orange-600", glow: "rgba(249,123,79,0.4)", ring: "hover:ring-orange-300/60", border: "border-orange-100" },
+    green:  { grad: "from-emerald-100/80 via-emerald-50/40 to-white", iconGrad: "from-emerald-300 via-emerald-500 to-[#28C76F]", blob1: "bg-emerald-300", blob2: "bg-teal-200", dot: "bg-emerald-500", text: "text-emerald-600", glow: "rgba(40,199,111,0.4)", ring: "hover:ring-emerald-300/60", border: "border-emerald-100" },
+    sky:    { grad: "from-sky-100/80 via-sky-50/40 to-white", iconGrad: "from-sky-300 via-sky-500 to-[#00B4D8]", blob1: "bg-sky-300", blob2: "bg-cyan-200", dot: "bg-sky-500", text: "text-sky-600", glow: "rgba(0,180,216,0.4)", ring: "hover:ring-sky-300/60", border: "border-sky-100" },
+    amber:  { grad: "from-amber-100/80 via-amber-50/40 to-white", iconGrad: "from-amber-300 via-amber-500 to-[#FFB300]", blob1: "bg-amber-300", blob2: "bg-yellow-200", dot: "bg-amber-500", text: "text-amber-600", glow: "rgba(255,179,0,0.4)", ring: "hover:ring-amber-300/60", border: "border-amber-100" },
+    red:    { grad: "from-red-100/80 via-red-50/40 to-white", iconGrad: "from-red-300 via-red-500 to-[#F0473C]", blob1: "bg-red-300", blob2: "bg-rose-200", dot: "bg-red-500", text: "text-red-500", glow: "rgba(240,71,60,0.4)", ring: "hover:ring-red-300/60", border: "border-red-100" },
+    blue:   { grad: "from-blue-100/80 via-blue-50/40 to-white", iconGrad: "from-blue-300 via-blue-500 to-[#3B82F6]", blob1: "bg-blue-300", blob2: "bg-indigo-200", dot: "bg-blue-500", text: "text-blue-600", glow: "rgba(59,130,246,0.4)", ring: "hover:ring-blue-300/60", border: "border-blue-100" },
+};
+
+// ─── UNIFORM STAT CARD (used for all overview KPI / secondary cards) ─────────
+const statCardVariants = {
+    hidden: { opacity: 0, y: 18, scale: 0.96 },
+    show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
+};
+
+function StatCard({ icon, label, value, prefix = "", trend, theme = "orange", onClick }) {
+    const t = STAT_THEMES[theme] || STAT_THEMES.orange;
+    return (
+        <motion.div
+            variants={statCardVariants}
+            whileHover={{ y: -8, scale: 1.015, boxShadow: `0 26px 44px -16px ${t.glow}` }}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            onClick={onClick}
+            className={`group relative isolate overflow-hidden rounded-[24px] p-5 cursor-pointer bg-gradient-to-br ${t.grad} border ${t.border} ring-1 ring-transparent ${t.ring} shadow-[0_2px_14px_-4px_rgba(15,23,42,0.08)] transition-[box-shadow,ring] duration-500`}
+        >
+            <div className={`pointer-events-none absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-30 ${t.blob1} transition-all duration-700 ease-out group-hover:scale-150 group-hover:opacity-45 group-hover:-translate-x-3 group-hover:translate-y-3`} />
+            <div className={`pointer-events-none absolute -left-8 -bottom-10 w-24 h-24 rounded-full blur-3xl opacity-20 ${t.blob2} transition-all duration-700 ease-out group-hover:scale-125 group-hover:opacity-35`} />
+
+            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[24px]">
+                <div className="absolute -inset-y-8 -left-1/2 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-[120%] group-hover:translate-x-[380%] transition-transform duration-[1100ms] ease-out" />
+            </div>
+
+            <div className="relative flex items-center gap-3 mb-5">
+                <div className={`relative w-11 h-11 rounded-2xl bg-gradient-to-br ${t.iconGrad} flex items-center justify-center text-white text-[19px] shadow-lg shrink-0 transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-6`}>
+                    <span className={`absolute inset-0 rounded-2xl ${t.blob1} opacity-0 group-hover:opacity-40 blur-md scale-125 transition-opacity duration-500`} />
+                    <span className="relative">{icon}</span>
+                </div>
+                <p className="text-[13px] font-bold text-slate-500 tracking-wide leading-snug">{label}</p>
+            </div>
+
+            <h3 className="relative text-[27px] font-extrabold text-slate-800 tabular-nums tracking-tight mb-2 leading-none transition-transform duration-300 group-hover:scale-[1.04] origin-left">
+                <CountUp value={value} prefix={prefix} />
+            </h3>
+
+            <div className="relative flex items-center gap-1.5">
+                <span className={`relative flex w-1.5 h-1.5`}>
+                    <span className={`absolute inline-flex h-full w-full rounded-full ${t.dot} opacity-60 group-hover:animate-ping`} />
+                    <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${t.dot} shadow-sm`} />
+                </span>
+                <p className={`text-[12px] font-bold ${t.text}`}>{trend}</p>
+            </div>
+
+            <div className={`absolute left-0 bottom-0 h-[3px] w-0 group-hover:w-full bg-gradient-to-r ${t.iconGrad} transition-all duration-500 ease-out rounded-full shadow-[0_0_8px_rgba(0,0,0,0.15)]`} />
+        </motion.div>
+    );
+}
+
 export default function SubAdminPanel() {
     const [activeTab, setActiveTab] = useState("overview");
     const [visas, setVisas] = useState([]);
@@ -1089,161 +1171,66 @@ export default function SubAdminPanel() {
                                 </span>
                             </div> */}
 
-                            {/* === TOP KPI ROW (matches AdminDashboard: Total Revenue / Visa Applications / Umrah Applications / Insurance Revenue) === */}
+                            {/* === TOP KPI ROW (matches AdminDashboard) === */}
                             <motion.div
                                 className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5"
                                 initial="hidden"
                                 animate="show"
-                                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07 } } }}
+                                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}
                             >
-                                {/* Total Revenue */}
-                                <motion.div
-                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(249,123,79,0.25)" }}
-                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                <StatCard
+                                    theme="green"
+                                    icon={<MdReceipt />}
+                                    label="Total Revenue"
+                                    value={countryRevenue + umrahRevenue}
+                                    prefix="PKR "
+                                    trend={`${(stats.total + (userData?.umrahAccess ? umrahRequests.length : 0)).toLocaleString()} applications`}
                                     onClick={() => navigate("/subadmin/revenue")}
-                                    whileTap={{ scale: 0.97 }}
-                                    className="bg-[#FEE8E0] rounded-2xl p-5 border border-black/5 cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#F97B4F] flex items-center justify-center text-white text-xl shadow-sm shadow-orange-300">
-                                            <MdReceipt />
-                                        </div>
-                                        <p className="text-base font-bold text-gray-600">Total Revenue</p>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {(countryRevenue + umrahRevenue).toLocaleString()}</h3>
-                                    <p className="text-[13px] font-bold text-orange-600">PKR {(countryRevenue + umrahRevenue).toLocaleString()} collected</p>
-                                </motion.div>
+                                />
 
-                                {/* Visa Applications */}
-                                <motion.div
-                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(40,199,111,0.25)" }}
-                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                <StatCard
+                                    theme="orange"
+                                    icon={<MdSwapHoriz />}
+                                    label="Visa Revenue"
+                                    value={countryRevenue}
+                                    prefix="PKR "
+                                    trend={`${stats.total.toLocaleString()} applications`}
                                     onClick={() => { setStatusFilter("All"); setActiveTab("visas"); }}
-                                    whileTap={{ scale: 0.97 }}
-                                    className="bg-[#E6F9F0] rounded-2xl p-5 border border-black/5 cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#28C76F] flex items-center justify-center text-white text-xl shadow-sm shadow-green-300">
-                                            <MdSwapHoriz />
-                                        </div>
-                                        <p className="text-base font-bold text-gray-600">Visa Applications</p>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">{stats.total}</h3>
-                                    <p className="text-[13px] font-bold text-emerald-600">All Applications</p>
-                                </motion.div>
+                                />
 
-                                {/* Umrah Applications — only for sub-admins granted Umrah access */}
                                 {userData?.umrahAccess && (
-                                    <motion.div
-                                        variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                        whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(0,180,216,0.25)" }}
-                                        transition={{ duration: 0.35, ease: "easeOut" }}
+                                    <StatCard
+                                        theme="sky"
+                                        icon={<FaKaaba />}
+                                        label="Umrah Revenue"
+                                        value={umrahRevenue}
+                                        prefix="PKR "
+                                        trend={`${umrahRequests.length.toLocaleString()} applications`}
                                         onClick={() => setActiveTab("umrah")}
-                                        whileTap={{ scale: 0.97 }}
-                                        className="bg-[#E0F3FE] rounded-2xl p-5 border border-black/5 cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-10 h-10 rounded-xl bg-[#00B4D8] flex items-center justify-center text-white text-xl shadow-sm shadow-sky-300">
-                                                <FaKaaba />
-                                            </div>
-                                            <p className="text-base font-bold text-gray-600">Umrah Applications</p>
-                                        </div>
-                                        <h3 className="text-3xl font-bold text-gray-800 mb-1">{umrahRequests.length}</h3>
-                                        <p className="text-[13px] font-bold text-sky-600">PKR {umrahRevenue.toLocaleString()} collected</p>
-                                    </motion.div>
+                                    />
                                 )}
 
-                                {/* Insurance Revenue */}
-                                <motion.div
-                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(255,179,0,0.25)" }}
-                                    transition={{ duration: 0.35, ease: "easeOut" }}
+                                <StatCard
+                                    theme="amber"
+                                    icon={<FaUserShield />}
+                                    label="Insurance Revenue"
+                                    value={insuranceRevenue}
+                                    prefix="PKR "
+                                    trend="Policy revenue"
                                     onClick={() => navigate("/subadmin/revenue")}
-                                    whileTap={{ scale: 0.97 }}
-                                    className="bg-[#FFF8E1] rounded-2xl p-5 border border-black/5 cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[#FFB300] flex items-center justify-center text-white text-xl shadow-sm shadow-amber-300">
-                                            <FaUserShield />
-                                        </div>
-                                        <p className="text-base font-bold text-gray-600">Insurance Revenue</p>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-gray-800 mb-1">PKR {insuranceRevenue.toLocaleString()}</h3>
-                                    <p className="text-[13px] font-bold text-amber-600">PKR {insuranceRevenue.toLocaleString()} collected</p>
-                                </motion.div>
+                                />
                             </motion.div>
 
-                            {/* === SECONDARY STATS ROW (3 white cards) === */}
+                            {/* === SECONDARY STATS ROW === */}
                             <motion.div
                                 className="grid grid-cols-1 md:grid-cols-3 gap-5"
                                 initial="hidden"
                                 animate="show"
                                 variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}
                             >
-                                <motion.div
-                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }}
-                                    transition={{ duration: 0.35, ease: "easeOut" }}
-                                    className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-default"
-                                >
-                                    <div className="flex items-start justify-between mb-1">
-                                        <div>
-                                            <h3 className="text-4xl font-bold text-gray-800">{stats.docReceived}</h3>
-                                            <p className="text-base font-semibold text-gray-400 mt-1">Docs Awaiting Review</p>
-                                        </div>
-                                        <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
-                                            <MdOutlineContentCopy className="text-orange-500 text-2xl" />
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
-                                        <span className="text-[13px] font-bold text-emerald-600">+35% vs Last Month</span>
-                                        <button onClick={() => { setStatusFilter("Doc Received"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
-                                    </div>
-                                </motion.div>
-
-                                <motion.div
-                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }}
-                                    transition={{ duration: 0.35, ease: "easeOut" }}
-                                    className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-default"
-                                >
-                                    <div className="flex items-start justify-between mb-1">
-                                        <div>
-                                            <h3 className="text-4xl font-bold text-gray-800">{stats.approved}</h3>
-                                            <p className="text-base font-semibold text-gray-400 mt-1">Total Approved Visas</p>
-                                        </div>
-                                        <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
-                                            <MdOutlineCreditCard className="text-orange-500 text-2xl" />
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
-                                        <span className="text-[13px] font-bold text-emerald-600">+35% vs Last Month</span>
-                                        <button onClick={() => { setStatusFilter("Approve"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
-                                    </div>
-                                </motion.div>
-
-                                <motion.div
-                                    variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                                    whileHover={{ y: -3, boxShadow: "0 14px 28px -12px rgba(15,23,42,0.14)" }}
-                                    transition={{ duration: 0.35, ease: "easeOut" }}
-                                    className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm cursor-default"
-                                >
-                                    <div className="flex items-start justify-between mb-1">
-                                        <div>
-                                            <h3 className="text-4xl font-bold text-gray-800">{stats.rejected}</h3>
-                                            <p className="text-base font-semibold text-gray-400 mt-1">Rejected Applications</p>
-                                        </div>
-                                        <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                                            <MdReceipt className="text-amber-500 text-2xl" />
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between pt-4 mt-3 border-t border-gray-100">
-                                        <span className="text-[13px] font-bold text-red-500">-20% vs Last Month</span>
-                                        <button onClick={() => { setStatusFilter("Reject"); setActiveTab("visas"); }} className="text-[13px] font-bold text-orange-500 underline hover:text-orange-600">View</button>
-                                    </div>
-                                </motion.div>
+                                <StatCard theme="amber" icon={<MdOutlineContentCopy />} label="Docs Awaiting Review" value={stats.docReceived} trend={stats.docReceived ? "Needs attention" : "Queue is empty"} onClick={() => { setStatusFilter("Doc Received"); setActiveTab("visas"); }} />
+                                <StatCard theme="green" icon={<MdOutlineCreditCard />} label="Total Approved Visas" value={stats.approved} trend="Successfully processed" onClick={() => { setStatusFilter("Approve"); setActiveTab("visas"); }} />
+                                <StatCard theme="red" icon={<MdReceipt />} label="Rejected Applications" value={stats.rejected} trend={stats.rejected ? "Action required" : "None rejected"} onClick={() => { setStatusFilter("Reject"); setActiveTab("visas"); }} />
                             </motion.div>
 
                             {/* === CHARTS ROW === */}
@@ -1435,10 +1422,13 @@ export default function SubAdminPanel() {
                                 </div>
 
                                 {/* Recent Applications */}
-                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <div className="bg-white rounded-[28px] border border-gray-100 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] p-6 sm:p-7">
                                     <div className="flex items-center justify-between mb-5">
-                                        <h3 className="text-lg font-bold text-gray-800">Recent Applications</h3>
-                                        <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">Latest 5</span>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-[#F97B4F] flex items-center justify-center text-white text-xl shadow-lg shadow-orange-200"><MdReceipt /></div>
+                                            <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Recent Applications</h3>
+                                        </div>
+                                        <span className="text-[13px] font-bold text-gray-400 bg-gray-100 px-3 py-1.5 rounded-full">Latest 5</span>
                                     </div>
                                     {visas.slice(0, 5).length === 0 ? (
                                         <div className="text-center py-10">
@@ -1446,23 +1436,24 @@ export default function SubAdminPanel() {
                                             <p className="text-gray-400 font-bold text-base">No applications yet</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-3">
+                                        <motion.div className="space-y-2.5" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}>
                                             {visas.slice(0, 5).map(visa => (
                                                 <motion.button
                                                     key={visa.id}
                                                     onClick={() => setSelectedDoc(visa)}
-                                                    whileHover={{ x: 2 }}
+                                                    variants={{ hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0, transition: { duration: 0.3, ease: "easeOut" } } }}
+                                                    whileHover={{ scale: 1.008, backgroundColor: "rgba(249,123,79,0.05)" }}
                                                     whileTap={{ scale: 0.98 }}
-                                                    className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-orange-50/50 transition-colors text-left"
+                                                    className="group w-full flex items-center gap-3 p-3.5 rounded-2xl border border-gray-100 hover:border-transparent hover:shadow-md transition-all duration-300 text-left"
                                                 >
-                                                    <div className="w-9 h-9 bg-orange-100 rounded-full flex items-center justify-center shrink-0">
-                                                        <FaPassport className="text-orange-500 text-base" />
+                                                    <div className="w-11 h-11 bg-gradient-to-br from-orange-400 to-[#F97B4F] rounded-2xl flex items-center justify-center shrink-0 text-white shadow-md shadow-orange-100 transition-transform duration-300 group-hover:scale-105">
+                                                        <FaPassport className="text-base" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-bold text-gray-800 text-base truncate">{visa.applicantName}</p>
-                                                        <p className="text-[12px] text-gray-400 truncate">{visa.country} • {visa.visaType}</p>
+                                                        <p className="font-bold text-gray-800 text-[15px] truncate">{visa.applicantName}</p>
+                                                        <p className="text-[12px] text-gray-400 truncate font-medium">{visa.country} • {visa.visaType}</p>
                                                     </div>
-                                                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                                                    <span className={`text-[11px] font-bold px-2.5 py-1.5 rounded-full shrink-0 ${
                                                         visa.status === "Approve" ? "bg-emerald-50 text-emerald-600" :
                                                         visa.status === "Reject" ? "bg-red-50 text-red-500" :
                                                         visa.status === "Analyzing" ? "bg-amber-50 text-amber-600" :
@@ -1472,7 +1463,7 @@ export default function SubAdminPanel() {
                                                     </span>
                                                 </motion.button>
                                             ))}
-                                        </div>
+                                        </motion.div>
                                     )}
                                 </div>
                             </div>
@@ -1522,46 +1513,53 @@ export default function SubAdminPanel() {
                             </div>
 
                             {/* === RECENTLY EDITED APPLICATIONS === */}
-                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                                <div className="flex items-center justify-between mb-5">
-                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                        <MdCheckCircle className="text-orange-500" />
-                                        Recently Edited Applications
-                                    </h3>
+                            <div className="bg-white rounded-[28px] border border-gray-100 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] p-7 sm:p-8">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-[#F97B4F] flex items-center justify-center text-white text-xl shadow-lg shadow-orange-200"><MdCheckCircle /></div>
+                                        <div>
+                                            <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Recently Edited Applications</h3>
+                                            <p className="text-[13px] font-semibold text-slate-400">Client-resubmitted visa applications</p>
+                                        </div>
+                                    </div>
                                     {visas.filter(v => v.userConfirmed).length > 0 && (
-                                        <span className="bg-orange-100 text-orange-700 text-sm font-bold px-3 py-1 rounded-full">
+                                        <span className="bg-orange-500 text-white text-[13px] font-bold px-4 py-2 rounded-full shadow-md shadow-orange-200 animate-pulse">
                                             {visas.filter(v => v.userConfirmed).length} New
                                         </span>
                                     )}
                                 </div>
                                 {visas.filter(v => v.userConfirmed).length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <MdCheckCircle className="text-gray-200 text-5xl mx-auto mb-3" />
-                                        <p className="text-gray-500 font-bold">No recently edited applications</p>
+                                    <div className="text-center py-16">
+                                        <MdCheckCircle className="text-gray-200 text-6xl mx-auto mb-3" />
+                                        <p className="text-gray-400 font-bold">No recently edited applications</p>
                                         <p className="text-base text-gray-400 mt-1">User-completed edits will appear here</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <motion.div className="space-y-3" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}>
                                         {visas.filter(v => v.userConfirmed).slice(0, 10).map(visa => (
-                                            <div key={visa.id} className="flex items-center justify-between p-4 bg-orange-50 rounded-xl border border-orange-100">
-                                                <div className="flex items-center gap-4 flex-1">
-                                                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                                                        <FaPassport className="text-orange-500" />
+                                            <motion.div key={visa.id}
+                                                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } } }}
+                                                whileHover={{ y: -3, boxShadow: "0 16px 32px -14px rgba(249,123,79,0.28)" }}
+                                                className="relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-gradient-to-br from-orange-50/80 via-white to-white rounded-2xl border border-orange-100 transition-shadow duration-300">
+                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-orange-400 to-orange-600" />
+                                                <div className="flex items-center gap-4 flex-1 min-w-0 pl-2">
+                                                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center shrink-0 text-white text-lg shadow-md shadow-orange-200">
+                                                        <FaPassport />
                                                     </div>
-                                                    <div className="flex-1">
-                                                        <p className="font-bold text-gray-800">{visa.applicantName}</p>
-                                                        <p className="text-sm text-gray-500">{visa.country} • {visa.visaType}</p>
+                                                    <div className="min-w-0">
+                                                        <p className="font-extrabold text-slate-800 text-[16px] truncate">{visa.applicantName}</p>
+                                                        <p className="text-[13px] text-slate-500 font-semibold">{visa.country} • {visa.visaType}</p>
                                                         {visa.adminMessage && (
-                                                            <p className="text-sm text-orange-700 mt-1">📝 Original Request: {visa.adminMessage}</p>
+                                                            <p className="text-[13px] text-orange-700 mt-1.5 font-medium">📝 Original Request: {visa.adminMessage}</p>
                                                         )}
                                                         {visa.userConfirmedAt && (
-                                                            <p className="text-sm text-gray-400 mt-1">
+                                                            <p className="text-[12px] text-slate-400 mt-1 font-semibold">
                                                                 ✓ Edited on {new Date(visa.userConfirmedAt).toLocaleDateString()} at {new Date(visa.userConfirmedAt).toLocaleTimeString()}
                                                             </p>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 shrink-0 pl-2 sm:pl-0">
                                                     <button
                                                         onClick={() => setHistoryVisa(visa)}
                                                         className="text-sm font-bold text-orange-600 bg-white px-3 py-1.5 rounded-full hover:bg-orange-600 hover:text-white transition-all border border-orange-100"
@@ -1572,9 +1570,9 @@ export default function SubAdminPanel() {
                                                         RE-SUBMITTED
                                                     </span>
                                                 </div>
-                                            </div>
+                                            </motion.div>
                                         ))}
-                                    </div>
+                                    </motion.div>
                                 )}
                             </div>
                         </div>
